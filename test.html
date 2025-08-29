@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>PHP WASM LOCAL API Test</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: system-ui, sans-serif;
+    background: #f9fafb;
+  }
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+  h1 {
+    font-size: 1.3rem;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  button {
+    display: block;
+    width: 100%;
+    padding: 0.9rem;
+    margin-bottom: 0.6rem;
+    border: 1px solid #c7d2fe;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:last-child {
+    margin-bottom: 0;
+  }
+  pre#output {
+    margin-top: 1rem;
+    width: calc(100% - 2rem);
+    min-height: 40vh;
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    font-family: ui-monospace, monospace;
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>PHP WASM LOCAL API Test</h1>
+
+    <button id="btnInline">Run Inline PHP</button>
+    <button id="btnGet1">Run GET /script_1.php</button>
+    <button id="btnGet2">Run GET /server_info.php</button>
+    <button id="btnPost">Run POST /process.php</button>
+
+    <pre id="output">Salida…</pre>
+  </div>
+
+  <!-- Configuración -->
+  <script>
+  window.benchmarkStart = performance.now();
+  window.phpConfig = {
+    DEBUG: true,
+    NUM_WORKERS: 2
+  };
+  </script>
+
+  <!-- Carga de la librería -->
+  <script src="php-runtime.js"></script>
+
+  <!-- Inicialización y runPHP -->
+  <script type="module">
+  window.runPHP = (function() {
+    const initPromise = new Promise(async resolve => {
+      while (!window.php) await new Promise(r => setTimeout(r, 10));
+      await window.php.init(window.phpConfig);
+      const elapsed = performance.now() - window.benchmarkStart;
+      console.warn(`[BENCHMARK] PHP Runtime listo en ${Math.round(elapsed)} ms`);
+      resolve();
+    });
+    return async function(codeOrRequest) {
+      await initPromise;
+      if (typeof codeOrRequest === 'string') {
+        return await window.php.runInline(codeOrRequest);
+      } else {
+        return await window.php.runRequest(codeOrRequest);
+      }
+    };
+  })();
+  </script>
+
+  <!-- Scripts de interacción -->
+  <script>
+  const outputEl = document.getElementById('output');
+  function logOutput(label, text) {
+    console.log(label, text);
+    outputEl.textContent += `\n=== ${label} ===\n${text}\n`;
+  }
+  document.getElementById('btnInline').onclick = async () => {
+    const result = await runPHP('<?php echo "Hola desde Inline PHP"; ?>');
+    logOutput('Inline PHP', result);
+  };
+  document.getElementById('btnGet1').onclick = async () => {
+    const result = await runPHP({ 
+      method: 'GET', 
+      query: '/www/php/script_1.php', 
+      payload: '', 
+      headers: '' 
+    });
+    logOutput('GET /script_1.php', result);
+  };
+  document.getElementById('btnGet2').onclick = async () => {
+    const result = await runPHP({ 
+      method: 'GET', 
+      query: '/www/php/server_info.php', 
+      payload: '', 
+      headers: '' 
+    });
+    logOutput('GET /server_info.php', result);
+  };
+  document.getElementById('btnPost').onclick = async () => {
+    const result = await runPHP({ 
+      method: 'POST', 
+      query: '/www/php/process.php', 
+      payload: 'x=42&y=99', 
+      headers: 'Content-Type: application/x-www-form-urlencoded' 
+    });
+    logOutput('POST /process.php', result);
+  };
+  </script>
+</body>
+</html>
