@@ -29,7 +29,10 @@ Incluye la librería y los scripts de inicialización en tu HTML:
 window.runPHP = (function() {
   const initPromise = new Promise(async resolve => {
     while (!window.php) await new Promise(r => setTimeout(r, 10));
-    await window.php.init(window.phpConfig);
+    await window.php.init({
+        DEBUG: true,
+        NUM_WORKERS: 2
+      });
     const elapsed = performance.now() - window.benchmarkStart;
     console.warn(`[BENCHMARK] PHP Runtime listo en ${Math.round(elapsed)} ms`);
     resolve();
