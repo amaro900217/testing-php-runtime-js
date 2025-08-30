@@ -38,6 +38,21 @@ function buildPhpServerEnv({ method, query, payload, headersStr, config = {} }) 
     else if (typeof val === 'number') php += `$_SERVER['${key}'] = ${val};\n`;
     else php += `$_SERVER['${key}'] = '${val.toString().replace(/'/g, "\\'")}';\n`;
   }
+  // Llenar $_GET desde la query string
+  if (method === 'GET' && query) {
+    const queryString = query.split('?')[1] || '';
+    const params = new URLSearchParams(queryString);
+    for (const [key, value] of params.entries()) {
+      php += `$_GET['${key}'] = '${value.replace(/'/g, "\\'")}';\n`;
+    }
+  }
+  // Llenar $_POST desde payload
+  if (method === 'POST' && payload) {
+    const params = new URLSearchParams(payload);
+    for (const [key, value] of params.entries()) {
+      php += `$_POST['${key}'] = '${value.replace(/'/g, "\\'")}';\n`;
+    }
+  }
   self.log('✅ PHP server environment built', php);
   return php;
 }
