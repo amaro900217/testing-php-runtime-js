@@ -25,7 +25,7 @@ const result = await runPHP.runInline('<?php echo "¡Hola desde PHP!"; ?>');
 console.log(result);
 ```
 
-### Simular petición HTTP
+### Realizar petición HTTP
 ```javascript
 const result = await runPHP.runRequest({
     method: "POST",
