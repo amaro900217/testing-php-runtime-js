@@ -76,18 +76,18 @@
             // Primero configuramos
             await runPHP.init({
                 DEBUG: true,
-                NUM_WORKERS: 4,
+                NUM_WORKERS: 2,
             });
         </script>
 
         <!--
         <script type="module">
             // Ejecutar código PHP directamente
-            runPHP('<?php echo "Hola Mundo!"; ?>').then((result) =>
+            runPHP.runInline('<?php echo "Hola Mundo!"; ?>').then((result) =>
                 console.log(result),
             );
             // O simular una petición HTTP
-            runPHP({
+            runPHP.runRequest({
                 method: "POST",
                 query: "/test.php?id=1",
                 payload: "name=test",
