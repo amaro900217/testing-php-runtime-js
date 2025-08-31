@@ -1,127 +1,230 @@
 // php-worker.js
-import { PhpWeb } from './node_modules/php-wasm/PhpWeb.mjs';
+import { PhpWeb } from "./node_modules/php-wasm/PhpWeb.mjs";
 
-let phpWeb = null;
-let initialized = false;
+class PhpWorker {
+  constructor() {
+    this.phpWeb = null;
+    this.initialized = false;
+    this.config = {};
 
-self.log = (...args) => { self.postMessage({ type: 'log', args }); };
+    // Bind de métodos para mantener el contexto
+    this.onMessage = this.onMessage.bind(this);
+    this.log = this.log.bind(this);
 
-function buildPhpServerEnv({ method, query, payload, headersStr, config = {} }) {
-  self.log('🔧 Building PHP server environment', { method, query, payload, headersStr });
-  const headers = {};
-  if (headersStr?.trim()) {
-    headersStr.split(';').forEach(h => {
-      if (!h.trim()) return;
-      const [key, ...rest] = h.split(':');
-      headers[key.trim()] = rest.join(':').trim();
+    // Inicializar el worker
+    self.onmessage = this.onMessage;
+  }
+
+  log(...args) {
+    self.postMessage({ type: "log", args });
+  }
+
+  buildPhpServerEnv({ method, query, payload, headersStr, config = {} }) {
+    this.log("🔧 Building PHP server environment", {
+      method,
+      query,
+      payload,
+      headersStr,
     });
+
+    const headers = this._parseHeaders(headersStr);
+    const [requestUri, queryString = ""] = (query ?? "").split("?");
+    const contentType =
+      headers["Content-Type"] || "application/x-www-form-urlencoded";
+
+    let php = this._buildServerVariables(
+      method,
+      requestUri,
+      queryString,
+      contentType,
+      payload,
+    );
+    php += this._buildHeaderVariables(headers);
+    php += this._buildConfigVariables(config);
+
+    if (method === "GET" && query) {
+      php += this._buildGetVariables(query);
+    }
+
+    if (method === "POST" && payload) {
+      php += this._buildPostVariables(payload);
+    }
+
+    this.log("✅ PHP server environment built", php);
+    return php;
   }
-  const [requestUri, queryString = ''] = (query ?? '').split('?');
-  const contentType = headers['Content-Type'] || 'application/x-www-form-urlencoded';
-  let php = `
-  $_SERVER['REMOTE_ADDR']    = '127.0.0.1';
-  $_SERVER['REQUEST_TIME']   = '${Math.floor(Date.now()/1000)}';
-  $_SERVER['CONTENT_TYPE']   = '${contentType}';
-  $_SERVER['CONTENT_LENGTH'] = '${(payload ?? '').length}';
-  $_SERVER['REQUEST_METHOD'] = '${method}';
-  $_SERVER['REQUEST_URI']    = '${requestUri}';
-  $_SERVER['QUERY_STRING']   = '${queryString}';
-  $_SERVER['SCRIPT_FILENAME']= '${requestUri}';
-  `;
-  for (const key in headers) {
-    const keyFormatted = 'HTTP_' + key.toUpperCase().replace(/-/g, '_');
-    php += `$_SERVER['${keyFormatted}'] = '${headers[key]}';\n`;
+
+  _parseHeaders(headersStr) {
+    const headers = {};
+    if (headersStr?.trim()) {
+      headersStr.split(";").forEach((h) => {
+        if (!h.trim()) return;
+        const [key, ...rest] = h.split(":");
+        headers[key.trim()] = rest.join(":").trim();
+      });
+    }
+    return headers;
   }
-  for (const key in config) {
-    const val = config[key];
-    if (typeof val === 'boolean') php += `$_SERVER['${key}'] = ${val ? 'true' : 'false'};\n`;
-    else if (typeof val === 'number') php += `$_SERVER['${key}'] = ${val};\n`;
-    else php += `$_SERVER['${key}'] = '${val.toString().replace(/'/g, "\\'")}';\n`;
+
+  _buildServerVariables(method, requestUri, queryString, contentType, payload) {
+    return `
+            $_SERVER['REMOTE_ADDR']    = '127.0.0.1';
+            $_SERVER['REQUEST_TIME']   = '${Math.floor(Date.now() / 1000)}';
+            $_SERVER['CONTENT_TYPE']   = '${contentType}';
+            $_SERVER['CONTENT_LENGTH'] = '${(payload ?? "").length}';
+            $_SERVER['REQUEST_METHOD'] = '${method}';
+            $_SERVER['REQUEST_URI']    = '${requestUri}';
+            $_SERVER['QUERY_STRING']   = '${queryString}';
+            $_SERVER['SCRIPT_FILENAME']= '${requestUri}';
+        `;
   }
-  // Llenar $_GET desde la query string
-  if (method === 'GET' && query) {
-    const queryString = query.split('?')[1] || '';
+
+  _buildHeaderVariables(headers) {
+    let php = "";
+    for (const key in headers) {
+      const keyFormatted = "HTTP_" + key.toUpperCase().replace(/-/g, "_");
+      php += `$_SERVER['${keyFormatted}'] = '${headers[key]}';\n`;
+    }
+    return php;
+  }
+
+  _buildConfigVariables(config) {
+    let php = "";
+    for (const key in config) {
+      const val = config[key];
+      if (typeof val === "boolean") {
+        php += `$_SERVER['${key}'] = ${val ? "true" : "false"};\n`;
+      } else if (typeof val === "number") {
+        php += `$_SERVER['${key}'] = ${val};\n`;
+      } else {
+        php += `$_SERVER['${key}'] = '${val.toString().replace(/'/g, "\\'")}';\n`;
+      }
+    }
+    return php;
+  }
+
+  _buildGetVariables(query) {
+    let php = "";
+    const queryString = query.split("?")[1] || "";
     const params = new URLSearchParams(queryString);
     for (const [key, value] of params.entries()) {
       php += `$_GET['${key}'] = '${value.replace(/'/g, "\\'")}';\n`;
     }
+    return php;
   }
-  // Llenar $_POST desde payload
-  if (method === 'POST' && payload) {
+
+  _buildPostVariables(payload) {
+    let php = "";
     const params = new URLSearchParams(payload);
     for (const [key, value] of params.entries()) {
       php += `$_POST['${key}'] = '${value.replace(/'/g, "\\'")}';\n`;
     }
+    return php;
   }
-  self.log('✅ PHP server environment built', php);
-  return php;
-}
 
-function captureOutput() {
-  let buffer = '';
-  const onOutput = e => { buffer += e.detail; self.log('📤 PHP output chunk', e.detail); };
-  const onError  = e => { buffer += e.detail; self.log('⚠️ PHP error chunk', e.detail); };
-  phpWeb.addEventListener('output', onOutput);
-  phpWeb.addEventListener('error', onError);
-  return {
-    stop() { phpWeb.removeEventListener('output', onOutput); phpWeb.removeEventListener('error', onError); },
-    get() { return buffer; }
-  };
-}
+  captureOutput() {
+    let buffer = "";
+    const onOutput = (e) => {
+      buffer += e.detail;
+      this.log("📤 PHP output chunk", e.detail);
+    };
+    const onError = (e) => {
+      buffer += e.detail;
+      this.log("⚠️ PHP error chunk", e.detail);
+    };
 
-self.onmessage = async e => {
-  const msg = e.data;
-  self.log('📨 Received message', msg);
-  if (msg.type === 'loadWasm') {
-    if (!phpWeb) {
-      phpWeb = new PhpWeb({ wasmBinary: msg.wasmBin, persist: { mountPath: "/www" } });
-      await phpWeb.ready;
-      self.config = { ...msg.cnfg };
-      initialized = true;
-      self.log('✅ PhpWeb WASM loaded and ready');
-      self.postMessage({ type: 'workerReady' });
+    this.phpWeb.addEventListener("output", onOutput);
+    this.phpWeb.addEventListener("error", onError);
+
+    return {
+      stop: () => {
+        this.phpWeb.removeEventListener("output", onOutput);
+        this.phpWeb.removeEventListener("error", onError);
+      },
+      get: () => buffer,
+    };
+  }
+
+  async loadWasm(wasmBin, config) {
+    if (!this.phpWeb) {
+      this.phpWeb = new PhpWeb({
+        wasmBinary: wasmBin,
+        persist: { mountPath: "/www" },
+      });
+      await this.phpWeb.ready;
+      this.config = { ...config };
+      this.initialized = true;
+      this.log("✅ PhpWeb WASM loaded and ready");
+      self.postMessage({ type: "workerReady" });
     }
-    return;
   }
 
-  if (!initialized) {
-    self.log('⚠️ Worker not initialized yet');
-    return;
-  }
-
-  if (msg.type === 'runInline') {
+  async runInline(id, code) {
     try {
-      self.log('▶️ Running inline PHP code');
-      await phpWeb.refresh();
-      const cap = captureOutput();
-      await phpWeb.run(msg.request.code);
+      this.log("▶️ Running inline PHP code");
+      await this.phpWeb.refresh();
+      const cap = this.captureOutput();
+      await this.phpWeb.run(code);
       cap.stop();
-      self.log('✅ Inline PHP run completed');
-      self.postMessage({ id: msg.id, result: cap.get() });
+      this.log("✅ Inline PHP run completed");
+      self.postMessage({ id, result: cap.get() });
     } catch (err) {
-      self.log('❌ Error in runInline', err);
-      self.postMessage({ id: msg.id, result: `PHP ERROR: ${err.message}` });
+      this.log("❌ Error in runInline", err);
+      self.postMessage({ id, result: `PHP ERROR: ${err.message}` });
     }
   }
 
-  if (msg.type === 'runRequest') {
+  async runRequest(id, request) {
     try {
-      const { method, query, payload, headers } = msg.request;
-            self.log('▶️ Running PHP request', { method, query, payload, headers });
+      const { method, query, payload, headers } = request;
+      this.log("▶️ Running PHP request", { method, query, payload, headers });
 
-      const serverEnv = buildPhpServerEnv({ method, query, payload, headersStr: headers, config: self.config });
+      const serverEnv = this.buildPhpServerEnv({
+        method,
+        query,
+        payload,
+        headersStr: headers,
+        config: this.config,
+      });
       const phpCode = `<?php ${serverEnv} include_once($_SERVER['SCRIPT_FILENAME']);`;
-            self.log('💻 Full PHP code to run:', phpCode);
+      this.log("💻 Full PHP code to run:", phpCode);
 
-      await phpWeb.refresh();
-      const cap = captureOutput();
-      await phpWeb.run(phpCode);
+      await this.phpWeb.refresh();
+      const cap = this.captureOutput();
+      await this.phpWeb.run(phpCode);
       cap.stop();
-      self.log('✅ PHP request completed');
-      self.postMessage({ id: msg.id, result: cap.get() });
+      this.log("✅ PHP request completed");
+      self.postMessage({ id, result: cap.get() });
     } catch (err) {
-      self.log('❌ Error in runRequest', err);
-      self.postMessage({ id: msg.id, result: `PHP ERROR: ${err.message}` });
+      this.log("❌ Error in runRequest", err);
+      self.postMessage({ id, result: `PHP ERROR: ${err.message}` });
     }
   }
-};
+
+  async onMessage(e) {
+    const msg = e.data;
+    this.log("📨 Received message", msg);
+
+    if (msg.type === "loadWasm") {
+      await this.loadWasm(msg.wasmBin, msg.cnfg);
+      return;
+    }
+
+    if (!this.initialized) {
+      this.log("⚠️ Worker not initialized yet");
+      return;
+    }
+
+    switch (msg.type) {
+      case "runInline":
+        await this.runInline(msg.id, msg.request.code);
+        break;
+      case "runRequest":
+        await this.runRequest(msg.id, msg.request);
+        break;
+    }
+  }
+}
+
+// Inicializar el worker
+new PhpWorker();
