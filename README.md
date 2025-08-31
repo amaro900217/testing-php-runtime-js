@@ -21,13 +21,13 @@ Ejecuta código PHP directamente en el navegador usando WebAssembly (php-wasm), 
 
 ### Ejecutar código PHP en línea
 ```javascript
-const result = await runPHP.runInline('<?php echo "¡Hola desde PHP!"; ?>');
+const result = await runPHP.inline('<?php echo "¡Hola desde PHP!"; ?>');
 console.log(result);
 ```
 
 ### Realizar petición HTTP
 ```javascript
-const result = await runPHP.runRequest({
+const result = await runPHP.request({
     method: "POST",
     query: "/index.php?user=test",
     payload: "name=test&value=123",

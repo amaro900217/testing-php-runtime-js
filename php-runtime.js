@@ -23,13 +23,13 @@ class PhpRuntime {
     this.workers = [];
   }
 
-  _log(...args) {
+  log(...args) {
     if (this._config.DEBUG) {
       console.log("[PHP Runtime]", ...args);
     }
   }
 
-  async _installWasmBin() {
+  async installWasmBin() {
     if (this._wasmBuffer) return this._wasmBuffer;
     if (!this._wasmBufferPromise) {
       this._wasmBufferPromise = (async () => {
@@ -52,10 +52,10 @@ class PhpRuntime {
         });
         if (exists) {
           this._wasmBuffer = exists;
-          this._log("📥 WASM loaded from IndexedDB.");
+          this.log("📥 WASM loaded from IndexedDB.");
           return this._wasmBuffer;
         }
-        this._log("⬇️ Downloading WASM...");
+        this.log("⬇️ Downloading WASM...");
         const response = await fetch("/assets/wasm/php-web.js.wasm.gz");
         if (!response.ok)
           throw new Error(`❌ Failed to download WASM: ${response.status}`);
@@ -69,14 +69,14 @@ class PhpRuntime {
           tx.oncomplete = () => resolve();
           tx.onerror = (e) => reject(e.target.error);
         });
-        this._log("💾 WASM saved to IndexedDB.");
+        this.log("💾 WASM saved to IndexedDB.");
         return wasmBuffer;
       })();
     }
     return this._wasmBufferPromise;
   }
 
-  async _installPhpFiles(wasmBuffer) {
+  async installPhpFiles(wasmBuffer) {
     let phpWeb = new PhpWeb({
       wasmBinary: wasmBuffer,
       persist: { mountPath: "/www" },
@@ -89,13 +89,13 @@ class PhpRuntime {
       alreadyInstalled = true;
     } catch {}
     if (alreadyInstalled) {
-      this._log("✅ PHP project already installed, skipping ZIP installation");
+      this.log("✅ PHP project already installed, skipping ZIP installation");
       await new Promise((resolve, reject) => {
         phpBin.FS.syncfs(true, (err) => (err ? reject(err) : resolve()));
       });
       return;
     }
-    this._log("⬇️ Downloading php.zip...");
+    this.log("⬇️ Downloading php.zip...");
     const response = await fetch("/assets/www/php.zip");
     if (!response.ok)
       throw new Error(`❌ Failed to download php.zip: ${response.statusText}`);
@@ -129,17 +129,17 @@ class PhpRuntime {
         }
       });
     });
-    this._log("✅ PHP project installed and synced");
+    this.log("✅ PHP project installed and synced");
     phpWeb = null;
   }
 
-  async _spawnWorkers(NUM_WORKERS, wasmBuffer, config) {
+  async spawnWorkers(NUM_WORKERS, wasmBuffer, config) {
     for (let i = 0; i < NUM_WORKERS; i++) {
       const worker = new Worker(new URL("./php-worker.js", import.meta.url), {
         type: "module",
       });
       worker.available = false;
-      worker.onmessage = (e) => this._handleWorkerMessage(worker, e);
+      worker.onmessage = (e) => this.handleWorkerMessage(worker, e);
       this.workers.push(worker);
       worker.postMessage({
         type: "loadWasm",
@@ -149,7 +149,7 @@ class PhpRuntime {
     }
   }
 
-  _processQueue() {
+  processQueue() {
     for (const worker of this.workers.filter((w) => w.available)) {
       const taskIndex = this._queue.findIndex((t) => !t.assigned);
       if (taskIndex === -1) break;
@@ -164,7 +164,7 @@ class PhpRuntime {
     }
   }
 
-  _handleWorkerMessage(worker, e) {
+  handleWorkerMessage(worker, e) {
     const { type, id, result, args } = e.data;
     if (type === "log") {
       if (this._config.DEBUG) {
@@ -174,7 +174,7 @@ class PhpRuntime {
     }
     if (type === "workerReady") {
       worker.available = true;
-      this._processQueue();
+      this.processQueue();
       return;
     }
     const itemIndex = this._queue.findIndex((q) => q.id === id);
@@ -182,14 +182,14 @@ class PhpRuntime {
       this._queue.splice(itemIndex, 1)[0].resolve(result);
     }
     worker.available = true;
-    this._processQueue();
+    this.processQueue();
   }
 
   async init(config = {}) {
     this._config = { ...this._configDefaults, ...config };
-    const wasmBin = await this._installWasmBin();
-    await this._installPhpFiles(wasmBin);
-    await this._spawnWorkers(this._config.NUM_WORKERS, wasmBin, this._config);
+    const wasmBin = await this.installWasmBin();
+    await this.installPhpFiles(wasmBin);
+    await this.spawnWorkers(this._config.NUM_WORKERS, wasmBin, this._config);
   }
 
   runInline(code, timeout = 5000) {
@@ -209,7 +209,7 @@ class PhpRuntime {
         },
         assigned: false,
       });
-      this._processQueue();
+      this.processQueue();
     });
   }
 
@@ -230,56 +230,29 @@ class PhpRuntime {
         },
         assigned: false,
       });
-      this._processQueue();
+      this.processQueue();
     });
   }
 }
 
-// Crear la función runPHP que también será un objeto con init
-const createRunPHP = () => {
-  const php = new PhpRuntime();
-  let initPromise = null;
-  // función principal
-  const runPHP = async function (codeOrRequest) {
-    if (!initPromise) {
-      throw new Error(
-        "PHP Runtime no está inicializado. Llama a runPHP.init() primero.",
-      );
-    }
+const php = new PhpRuntime();
+let initPromise = null;
 
-    await initPromise;
-
-    if (typeof codeOrRequest === "string") {
-      return await runPHP.runInline(codeOrRequest);
-    } else {
-      return await runPHP.runRequest(codeOrRequest);
-    }
-  };
-
-  // método init
-  runPHP.init = async function (config = {}) {
+const runPHP = {
+  init: async function (config = {}) {
     initPromise = php.init(config);
     return initPromise;
-  };
-
-  // método explícito: runPHP.runInline()
-  runPHP.runInline = async function (code) {
+  },
+  inline: async function (code) {
     if (!initPromise) throw new Error("Debes llamar primero a runPHP.init()");
     await initPromise;
     return php.runInline(code);
-  };
-
-  // método explícito: runPHP.runRequest()
-  runPHP.runRequest = async function (request) {
+  },
+  request: async function (request) {
     if (!initPromise) throw new Error("Debes llamar primero a runPHP.init()");
     await initPromise;
     return php.runRequest(request);
-  };
-
-  return runPHP;
+  },
 };
 
-// Crear la instancia global
-window.runPHP = createRunPHP();
-
-//export default PhpRuntime;
+window.runPHP = runPHP;

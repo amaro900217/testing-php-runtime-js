@@ -83,11 +83,11 @@
         <!--
         <script type="module">
             // Ejecutar código PHP directamente
-            runPHP.runInline('<?php echo "Hola Mundo!"; ?>').then((result) =>
+            runPHP.inline('<?php echo "Hola Mundo!"; ?>').then((result) =>
                 console.log(result),
             );
             // O simular una petición HTTP
-            runPHP.runRequest({
+            runPHP.request({
                 method: "POST",
                 query: "/test.php?id=1",
                 payload: "name=test",
@@ -104,13 +104,13 @@
                 outputEl.textContent += `\n=== ${label} ===\n${text}\n`;
             }
             document.getElementById("btnInline").onclick = async () => {
-                const result = await runPHP.runInline(
+                const result = await runPHP.inline(
                     '<?php echo "Hola desde Inline PHP"; ?>',
                 );
                 logOutput("Inline PHP", result);
             };
             document.getElementById("btnGet1").onclick = async () => {
-                const result = await runPHP.runRequest({
+                const result = await runPHP.request({
                     method: "GET",
                     query: "/www/php/script_1.php",
                     payload: "",
@@ -119,7 +119,7 @@
                 logOutput("GET /script_1.php", result);
             };
             document.getElementById("btnGet2").onclick = async () => {
-                const result = await runPHP.runRequest({
+                const result = await runPHP.request({
                     method: "GET",
                     query: "/www/php/server_info.php",
                     payload: "",
@@ -128,7 +128,7 @@
                 logOutput("GET /server_info.php", result);
             };
             document.getElementById("btnPost").onclick = async () => {
-                const result = await runPHP.runRequest({
+                const result = await runPHP.request({
                     method: "POST",
                     query: "/www/php/process.php",
                     payload: "x=42&y=99",
