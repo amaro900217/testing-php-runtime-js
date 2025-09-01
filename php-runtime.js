@@ -19,6 +19,7 @@ class PhpRuntime {
     this._wasmBuffer = null;
     this._installPromise = null;
     this._wasmBufferPromise = null;
+    this._db = null;
     this._queue = [];
     this._nextId = 0;
     this.workers = [];
@@ -34,35 +35,47 @@ class PhpRuntime {
     if (this._wasmBuffer) return this._wasmBuffer;
     if (!this._wasmBufferPromise) {
       this._wasmBufferPromise = (async () => {
-        const db = await new Promise((resolve, reject) => {
-          const request = indexedDB.open("/wasm", 1);
-          request.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains("FILE_DATA"))
-              db.createObjectStore("FILE_DATA");
-          };
-          request.onsuccess = (e) => resolve(e.target.result);
-          request.onerror = (e) => reject(e.target.error);
-        });
+        // --- Reutilizar conexión IndexedDB en memoria ---
+        if (!this._db) {
+          this._db = await new Promise((resolve, reject) => {
+            const request = indexedDB.open("/wasm", 1);
+            request.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains("FILE_DATA"))
+                db.createObjectStore("FILE_DATA");
+            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+          });
+        }
+        const db = this._db;
+
+        // --- Buscar en IndexedDB ---
         const exists = await new Promise((resolve) => {
           const tx = db.transaction("FILE_DATA", "readonly");
           const store = tx.objectStore("FILE_DATA");
           const req = store.get("phpWasm");
-          req.onsuccess = () => resolve(req.result ? req.result : null);
+          req.onsuccess = () => resolve(req.result ?? null);
           req.onerror = () => resolve(null);
         });
+
         if (exists) {
           this._wasmBuffer = exists;
           this.log("📥 WASM loaded from IndexedDB.");
-          return this._wasmBuffer;
+          return exists;
         }
+
+        // --- Descargar y descomprimir ---
         this.log("⬇️ Downloading WASM...");
         const response = await fetch("/assets/wasm/php-web.js.wasm.gz");
         if (!response.ok)
           throw new Error(`❌ Failed to download WASM: ${response.status}`);
+
         const compressed = new Uint8Array(await response.arrayBuffer());
         const wasmBuffer = gunzipSync(compressed);
         this._wasmBuffer = wasmBuffer;
+
+        // --- Guardar en IndexedDB ---
         await new Promise((resolve, reject) => {
           const tx = db.transaction("FILE_DATA", "readwrite");
           const store = tx.objectStore("FILE_DATA");
@@ -70,6 +83,7 @@ class PhpRuntime {
           tx.oncomplete = () => resolve();
           tx.onerror = (e) => reject(e.target.error);
         });
+
         this.log("💾 WASM saved to IndexedDB.");
         return wasmBuffer;
       })();
