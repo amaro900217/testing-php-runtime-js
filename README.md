@@ -23,7 +23,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
 ## Usage
 
 ### Execute Inline PHP Code
-```javascript
+```html
 <script>
   const result = await runPHP.inline('<?php echo "Hello from PHP!"; ?>');
   console.log(result);
@@ -31,7 +31,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
 ```
 
 ### Make an HTTP-Like Request
-```javascript
+```html
 <script>
   const result = await runPHP.request({
       method: "POST",
