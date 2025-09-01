@@ -3,6 +3,7 @@ import { PhpWeb } from "./node_modules/php-wasm/PhpWeb.mjs";
 import { unzip, gunzipSync } from "./node_modules/fflate/esm/browser.js";
 
 class PhpWorker {
+  // init vars
   constructor() {
     this.db = null;
     this.config = {};
