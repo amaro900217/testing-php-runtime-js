@@ -1,18 +1,139 @@
 // php-worker.js
 import { PhpWeb } from "./node_modules/php-wasm/PhpWeb.mjs";
+import { unzip, gunzipSync } from "./node_modules/fflate/esm/browser.js";
 
 class PhpWorker {
   constructor() {
-    this.phpWeb = null;
-    this.initialized = false;
+    this.db = null;
     this.config = {};
-    this.onMessage = this.onMessage.bind(this);
+    this.phpWeb = null;
+    this.wasmBuffer = null;
+    this.initialized = false;
     this.log = this.log.bind(this);
     self.onmessage = this.onMessage;
+    this.onMessage = this.onMessage.bind(this);
   }
 
   log(...args) {
     self.postMessage({ type: "log", args });
+  }
+
+  async installWasmBin() {
+    if (this.wasmBuffer) return this.wasmBuffer;
+    if (!this.db) {
+      this.db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open("/wasm", 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("FILE_DATA"))
+            db.createObjectStore("FILE_DATA");
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+    const db = this.db;
+    const exists = await new Promise((resolve) => {
+      const tx = db.transaction("FILE_DATA", "readonly");
+      const store = tx.objectStore("FILE_DATA");
+      const req = store.get("phpWasm");
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+    if (exists) {
+      this.log("📥 [Worker] WASM loaded from IndexedDB.");
+      this.wasmBuffer = exists;
+      return exists;
+    }
+    this.log("⬇️ [Worker] Downloading WASM...");
+    const compressed = await fetch("/assets/wasm/php-web.js.wasm.gz").then(
+      async (res) => {
+        if (!res.ok)
+          throw new Error(`❌ Failed to download WASM: ${res.status}`);
+        return new Uint8Array(await res.arrayBuffer());
+      },
+    );
+    const wasmBuffer = gunzipSync(compressed);
+    this.wasmBuffer = wasmBuffer;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("FILE_DATA", "readwrite");
+      const store = tx.objectStore("FILE_DATA");
+      store.put(wasmBuffer, "phpWasm");
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e.target.error);
+    });
+    this.log("💾 [Worker] WASM saved to IndexedDB.");
+    return wasmBuffer;
+  }
+
+  async installPhpFiles(wasmBuffer) {
+    let phpWeb = new PhpWeb({
+      wasmBinary: wasmBuffer,
+      persist: { mountPath: "/www" },
+    });
+    await phpWeb.ready;
+    const phpBin = await phpWeb.binary;
+    let alreadyInstalled = false;
+    try {
+      phpBin.FS.stat("/www/INSTALLED.txt");
+      alreadyInstalled = true;
+    } catch {}
+    if (alreadyInstalled) {
+      this.log(
+        "✅ [Worker] PHP project already installed, skipping ZIP installation",
+      );
+      await new Promise((resolve, reject) => {
+        phpBin.FS.syncfs(true, (err) => (err ? reject(err) : resolve()));
+      });
+      phpWeb = null;
+      return;
+    }
+    this.log("⬇️ [Worker] Downloading php.zip...");
+    const zipData = await fetch("/assets/www/php.zip").then(async (res) => {
+      if (!res.ok)
+        throw new Error(`❌ Failed to download php.zip: ${res.statusText}`);
+      return new Uint8Array(await res.arrayBuffer());
+    });
+    this.log("📦 [Worker] Unzipping PHP files...");
+    const unzippedFiles = await new Promise((resolve, reject) => {
+      unzip(zipData, (err, files) => (err ? reject(err) : resolve(files)));
+    });
+    this.log("📝 [Worker] Writing PHP files to virtual filesystem...");
+    for (const relativePath in unzippedFiles) {
+      const content = unzippedFiles[relativePath];
+      const fullPath = `/www/${relativePath}`;
+      const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+      try {
+        phpBin.FS.mkdirTree(parentDir);
+      } catch {}
+      if (content.length === 0 && relativePath.endsWith("/")) {
+        try {
+          phpBin.FS.mkdir(fullPath);
+        } catch {}
+      } else {
+        const data =
+          content instanceof Uint8Array ? content : new Uint8Array(content);
+        phpBin.FS.writeFile(fullPath, data);
+      }
+    }
+    phpBin.FS.writeFile("/www/INSTALLED.txt", "installed");
+    await new Promise((resolve, reject) => {
+      phpBin.FS.syncfs(false, (err) => (err ? reject(err) : resolve()));
+    });
+    this.log("✅ [Worker] PHP project installed and synced");
+    phpWeb = null;
+  }
+
+  async handleInstallation() {
+    try {
+      this.log("🚀 [Worker] Starting installation...");
+      const wasmBuffer = await this.installWasmBin();
+      await this.installPhpFiles(wasmBuffer);
+      this.log("🎉 [Worker] Installation complete.");
+      self.postMessage({ type: "install_complete" });
+    } catch (err) {
+      self.postMessage({ type: "error", error: err.message });
+    }
   }
 
   buildPhpServerEnv({ method, query, payload, headersStr, config = {} }) {
@@ -94,20 +215,20 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
     for (const key in config) {
       const val = config[key];
       if (typeof val === "boolean") {
-        phpParts.push(`$_SERVER['${key}'] = ${val ? "true" : "false"};\n`);
+        phpParts.push(`$_SERVER['${key}'] = ${val ? "true" : "false"};`);
       } else if (typeof val === "number") {
-        phpParts.push(`$_SERVER['${key}'] = ${val};\n`);
+        phpParts.push(`$_SERVER['${key}'] = ${val};`);
       } else {
         // Reemplazo de comillas simples
-        const strVal = String(val).replace(/'/g, "\\'");
-        phpParts.push(`$_SERVER['${key}'] = '${strVal}';\n`);
+        const strVal = String(val).replace(/'/g, "'\'");
+        phpParts.push(`$_SERVER['${key}'] = '${strVal}';`);
       }
     }
     return phpParts.join("");
   }
 
   escapePhp(str) {
-    return typeof str === "string" ? str.replace(/'/g, "\\'") : str;
+    return typeof str === "string" ? str.replace(/'/g, "'\'") : str;
   }
 
   buildGetVariables(query) {
@@ -206,7 +327,11 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
 
   async onMessage(e) {
     const { data: msg } = e;
-    this.log("📨 Received message", msg);
+    this.log("📨 [Worker] Received message", msg);
+    if (msg.type === "install") {
+      await this.handleInstallation();
+      return;
+    }
     if (msg.type === "loadWasm") {
       await this.loadWasm(msg.wasmBin, msg.cnfg);
       return;
@@ -224,5 +349,4 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
   }
 }
 
-// Inicializar el worker
 new PhpWorker();

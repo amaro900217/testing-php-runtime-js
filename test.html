@@ -422,7 +422,7 @@
             }
 
             // Iniciar el timer
-            window.timerInterval = setInterval(updateTimer, 10);
+            window.timerInterval = setInterval(updateTimer, 50);
 
             // Función para finalizar el timer
             function stopTimer(message) {
@@ -448,7 +448,7 @@
                 // Configurar PHP Runtime
                 await runPHP.init({
                     DEBUG: true,
-                    NUM_WORKERS: 2,
+                    NUM_WORKERS: 1,
                     TIMEOUT_WORKER: 15000,
                     DOCUMENT_ROOT: "/www",
                     ENTRY_POINT: "",

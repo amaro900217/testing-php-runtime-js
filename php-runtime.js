@@ -1,11 +1,10 @@
 // php-runtime.js
-import { unzip, gunzipSync } from "./node_modules/fflate/esm/browser.js";
 import { PhpWeb } from "./node_modules/php-wasm/PhpWeb.mjs";
 
 class PhpRuntime {
   constructor() {
-    this._config = {};
-    this._configDefaults = {
+    this.config = {};
+    this.configDefaults = {
       DEBUG: false,
       NUM_WORKERS: 2,
       TIMEOUT_WORKER: 1000,
@@ -16,169 +15,80 @@ class PhpRuntime {
       SERVER_SOFTWARE: "wasm-server-0.0.8",
       SERVER_PORT: `8080`,
     };
-    this._wasmBuffer = null;
-    this._installPromise = null;
-    this._wasmBufferPromise = null;
-    this._db = null;
-    this._queue = [];
-    this._nextId = 0;
+    this.wasmBuffer = null;
+    this.db = null;
+    this.queue = [];
+    this.nextId = 0;
     this.workers = [];
   }
 
   log(...args) {
-    if (this._config.DEBUG) {
+    if (this.config.DEBUG) {
       console.log("[PHP Runtime]", ...args);
     }
   }
 
-  async installWasmBin() {
-    // Retornar cache si ya está cargado
-    if (this._wasmBuffer) return this._wasmBuffer;
-
-    // Promesa única para llamadas concurrentes
-    if (!this._wasmBufferPromise) {
-      this._wasmBufferPromise = (async () => {
-        // --- Abrir IndexedDB si no existe ---
-        if (!this._db) {
-          this._db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("/wasm", 1);
-            request.onupgradeneeded = (e) => {
-              const db = e.target.result;
-              if (!db.objectStoreNames.contains("FILE_DATA"))
-                db.createObjectStore("FILE_DATA");
-            };
-            request.onsuccess = (e) => resolve(e.target.result);
-            request.onerror = (e) => reject(e.target.error);
-          });
-        }
-        const db = this._db;
-
-        // --- Iniciar descarga en paralelo ---
-        const fetchPromise = fetch("/assets/wasm/php-web.js.wasm.gz").then(
-          async (res) => {
-            if (!res.ok)
-              throw new Error(`❌ Failed to download WASM: ${res.status}`);
-            return new Uint8Array(await res.arrayBuffer());
-          },
-        );
-
-        // --- Buscar en IndexedDB ---
-        const exists = await new Promise((resolve) => {
-          const tx = db.transaction("FILE_DATA", "readonly");
-          const store = tx.objectStore("FILE_DATA");
-          const req = store.get("phpWasm");
-          req.onsuccess = () => resolve(req.result ?? null);
-          req.onerror = () => resolve(null);
-        });
-
-        if (exists) {
-          this._wasmBuffer = exists;
-          this.log("📥 WASM loaded from IndexedDB.");
-          return exists;
-        }
-
-        // --- Esperar la descarga si no estaba en IndexedDB ---
-        this.log("⬇️ Downloading WASM...");
-        const compressed = await fetchPromise;
-
-        // --- Descomprimir el buffer ---
-        const wasmBuffer = gunzipSync(compressed);
-        this._wasmBuffer = wasmBuffer;
-
-        // --- Guardar en IndexedDB ---
-        await new Promise((resolve, reject) => {
-          const tx = db.transaction("FILE_DATA", "readwrite");
-          const store = tx.objectStore("FILE_DATA");
-          store.put(wasmBuffer, "phpWasm");
-          tx.oncomplete = () => resolve();
-          tx.onerror = (e) => reject(e.target.error);
-        });
-
-        this.log("💾 WASM saved to IndexedDB.");
-        return wasmBuffer;
-      })();
+  async getWasmBufferFromCache() {
+    if (this.wasmBuffer) return this.wasmBuffer;
+    if (!this.db) {
+      this.db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open("/wasm", 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("FILE_DATA"))
+            db.createObjectStore("FILE_DATA");
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
     }
-    return this._wasmBufferPromise;
+    const wasmBuffer = await new Promise((resolve) => {
+      const tx = this.db.transaction("FILE_DATA", "readonly");
+      const store = tx.objectStore("FILE_DATA");
+      const req = store.get("phpWasm");
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+    if (!wasmBuffer) {
+      throw new Error(
+        "Could not find WASM buffer in IndexedDB after worker installation.",
+      );
+    }
+    this.log("📥 [Main] WASM loaded from IndexedDB.");
+    this.wasmBuffer = wasmBuffer;
+    return wasmBuffer;
   }
 
-  async installPhpFiles(wasmBuffer) {
-    // --- Inicializar PhpWeb ---
-    let phpWeb = new PhpWeb({
-      wasmBinary: wasmBuffer,
-      persist: { mountPath: "/www" },
-    });
-    await phpWeb.ready;
-    const phpBin = await phpWeb.binary;
-
-    // --- Verificar si ya está instalado ---
-    let alreadyInstalled = false;
-    try {
-      phpBin.FS.stat("/www/INSTALLED.txt");
-      alreadyInstalled = true;
-    } catch {}
-
-    if (alreadyInstalled) {
-      this.log("✅ PHP project already installed, skipping ZIP installation");
-      await new Promise((resolve, reject) => {
-        phpBin.FS.syncfs(true, (err) => (err ? reject(err) : resolve()));
-      });
-      return;
-    }
-
-    // --- Descargar php.zip ---
-    this.log("⬇️ Downloading php.zip...");
-    const fetchPromise = fetch("/assets/www/php.zip").then(async (res) => {
-      if (!res.ok)
-        throw new Error(`❌ Failed to download php.zip: ${res.statusText}`);
-      return new Uint8Array(await res.arrayBuffer());
-    });
-
-    const zipData = await fetchPromise;
-
-    // --- Descomprimir ZIP asíncronamente ---
+  async init(config = {}) {
+    this.config = { ...this.configDefaults, ...config };
+    this.log("🚀 [Main] Starting installation worker...");
+    const primaryWorker = new Worker(
+      new URL("./php-worker.js", import.meta.url),
+      {
+        type: "module",
+      },
+    );
     await new Promise((resolve, reject) => {
-      unzip(zipData, async (err, files) => {
-        if (err) return reject(err);
-
-        try {
-          for (const relativePath in files) {
-            const content = files[relativePath];
-            const fullPath = `/www/${relativePath}`;
-            const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
-
-            // Crear directorios padres si no existen
-            try {
-              phpBin.FS.mkdirTree(parentDir);
-            } catch {}
-
-            if (content.length === 0 && relativePath.endsWith("/")) {
-              try {
-                phpBin.FS.mkdir(fullPath);
-              } catch {}
-            } else {
-              const data =
-                content instanceof Uint8Array
-                  ? content
-                  : new Uint8Array(content);
-              phpBin.FS.writeFile(fullPath, data);
-            }
+      primaryWorker.onmessage = (e) => {
+        if (e.data.type === "install_complete") {
+          this.log("🎉 [Main] Installation complete.");
+          primaryWorker.terminate();
+          resolve();
+        } else if (e.data.type === "error") {
+          reject(new Error(`Installation worker error: ${e.data.error}`));
+        } else {
+          if (e.data.type === "log" && this.config.DEBUG) {
+            console.log(...e.data.args);
           }
-
-          // --- Sincronizar FS ---
-          phpBin.FS.syncfs(false, (err) => (err ? reject(err) : resolve()));
-        } catch (err) {
-          reject(err);
         }
-      });
+      };
+      primaryWorker.postMessage({ type: "install" });
     });
-
-    this.log("✅ PHP project installed and synced");
-
-    // Liberar memoria
-    phpWeb = null;
+    const wasmBin = await this.getWasmBufferFromCache();
+    this.spawnWorkers(this.config.NUM_WORKERS, wasmBin, this.config);
   }
 
-  async spawnWorkers(num_workers, wasmBuffer, config) {
+  spawnWorkers(num_workers, wasmBuffer, config) {
     for (let i = 0; i < num_workers; i++) {
       const worker = new Worker(new URL("./php-worker.js", import.meta.url), {
         type: "module",
@@ -195,10 +105,21 @@ class PhpRuntime {
   }
 
   processQueue() {
-    for (const worker of this.workers.filter((w) => w.available)) {
-      const taskIndex = this._queue.findIndex((t) => !t.assigned);
-      if (taskIndex === -1) break;
-      const task = this._queue[taskIndex];
+    for (const worker of this.workers) {
+      if (!worker.available) {
+        continue;
+      }
+      let taskIndex = -1;
+      for (let i = 0; i < this.queue.length; i++) {
+        if (!this.queue[i].assigned) {
+          taskIndex = i;
+          break;
+        }
+      }
+      if (taskIndex === -1) {
+        break;
+      }
+      const task = this.queue[taskIndex];
       task.assigned = true;
       worker.available = false;
       worker.postMessage({
@@ -212,7 +133,7 @@ class PhpRuntime {
   handleWorkerMessage(worker, e) {
     const { type, id, result, args } = e.data;
     if (type === "log") {
-      if (this._config.DEBUG) {
+      if (this.config.DEBUG) {
         console.log("[PHP Worker]", ...args);
       }
       return;
@@ -222,29 +143,30 @@ class PhpRuntime {
       this.processQueue();
       return;
     }
-    const itemIndex = this._queue.findIndex((q) => q.id === id);
+
+    let itemIndex = -1;
+    for (let i = 0; i < this.queue.length; i++) {
+      if (this.queue[i].id === id) {
+        itemIndex = i;
+        break;
+      }
+    }
+
     if (itemIndex !== -1) {
-      this._queue.splice(itemIndex, 1)[0].resolve(result);
+      this.queue.splice(itemIndex, 1)[0].resolve(result);
     }
     worker.available = true;
     this.processQueue();
   }
 
-  async init(config = {}) {
-    this._config = { ...this._configDefaults, ...config };
-    const wasmBin = await this.installWasmBin();
-    await this.installPhpFiles(wasmBin);
-    await this.spawnWorkers(this._config.NUM_WORKERS, wasmBin, this._config);
-  }
-
-  runInline(code, timeout = this._config.TIMEOUT_WORKER) {
+  runInline(code, timeout = this.config.TIMEOUT_WORKER) {
     return new Promise((resolve, reject) => {
-      const id = this._nextId++;
+      const id = this.nextId++;
       const timer = setTimeout(
         () => reject(new Error("Worker timeout")),
         timeout,
       );
-      this._queue.push({
+      this.queue.push({
         type: "runInline",
         id,
         request: { code },
@@ -260,15 +182,15 @@ class PhpRuntime {
 
   runRequest(
     { method, query, payload, headers },
-    timeout = this._config.TIMEOUT_WORKER,
+    timeout = this.config.TIMEOUT_WORKER,
   ) {
     return new Promise((resolve, reject) => {
-      const id = this._nextId++;
+      const id = this.nextId++;
       const timer = setTimeout(
         () => reject(new Error("Worker timeout")),
         timeout,
       );
-      this._queue.push({
+      this.queue.push({
         type: "runRequest",
         id,
         request: { method, query, payload, headers },
