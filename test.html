@@ -2,98 +2,311 @@
 <html lang="es">
     <head>
         <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>PHP WASM LOCAL API Test</title>
+
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                darkMode: ["class"],
+                theme: {
+                    container: {
+                        center: true,
+                        padding: "2rem",
+                        screens: {
+                            "2xl": "1400px",
+                        },
+                    },
+                    extend: {
+                        colors: {
+                            border: "hsl(var(--border))",
+                            input: "hsl(var(--input))",
+                            ring: "hsl(var(--ring))",
+                            background: "hsl(var(--background))",
+                            foreground: "hsl(var(--foreground))",
+                            primary: {
+                                DEFAULT: "hsl(var(--primary))",
+                                foreground: "hsl(var(--primary-foreground))",
+                            },
+                            secondary: {
+                                DEFAULT: "hsl(var(--secondary))",
+                                foreground: "hsl(var(--secondary-foreground))",
+                            },
+                            destructive: {
+                                DEFAULT: "hsl(var(--destructive))",
+                                foreground:
+                                    "hsl(var(--destructive-foreground))",
+                            },
+                            muted: {
+                                DEFAULT: "hsl(var(--muted))",
+                                foreground: "hsl(var(--muted-foreground))",
+                            },
+                            accent: {
+                                DEFAULT: "hsl(var(--accent))",
+                                foreground: "hsl(var(--accent-foreground))",
+                            },
+                            popover: {
+                                DEFAULT: "hsl(var(--popover))",
+                                foreground: "hsl(var(--popover-foreground))",
+                            },
+                            card: {
+                                DEFAULT: "hsl(var(--card))",
+                                foreground: "hsl(var(--card-foreground))",
+                            },
+                        },
+                        borderRadius: {
+                            lg: "var(--radius)",
+                            md: "calc(var(--radius) - 2px)",
+                            sm: "calc(var(--radius) - 4px)",
+                        },
+                        keyframes: {
+                            "accordion-down": {
+                                from: { height: 0 },
+                                to: {
+                                    height: "var(--radix-accordion-content-height)",
+                                },
+                            },
+                            "accordion-up": {
+                                from: {
+                                    height: "var(--radix-accordion-content-height)",
+                                },
+                                to: { height: 0 },
+                            },
+                        },
+                        animation: {
+                            "accordion-down": "accordion-down 0.2s ease-out",
+                            "accordion-up": "accordion-up 0.2s ease-out",
+                        },
+                    },
+                },
+            };
+        </script>
         <style>
+            :root {
+                --background: 0 0% 100%;
+                --foreground: 222.2 84% 4.9%;
+                --card: 0 0% 100%;
+                --card-foreground: 222.2 84% 4.9%;
+                --popover: 0 0% 100%;
+                --popover-foreground: 222.2 84% 4.9%;
+                --primary: 221.2 83.2% 53.3%;
+                --primary-foreground: 210 40% 98%;
+                --secondary: 210 40% 96%;
+                --secondary-foreground: 222.2 84% 4.9%;
+                --muted: 210 40% 96%;
+                --muted-foreground: 215.4 16.3% 46.9%;
+                --accent: 210 40% 96%;
+                --accent-foreground: 222.2 84% 4.9%;
+                --destructive: 0 84.2% 60.2%;
+                --destructive-foreground: 210 40% 98%;
+                --border: 214.3 31.8% 91.4%;
+                --input: 214.3 31.8% 91.4%;
+                --ring: 221.2 83.2% 53.3%;
+                --radius: 0.5rem;
+            }
+
+            .dark {
+                --background: 222.2 84% 4.9%;
+                --foreground: 210 40% 98%;
+                --card: 222.2 84% 4.9%;
+                --card-foreground: 210 40% 98%;
+                --popover: 222.2 84% 4.9%;
+                --popover-foreground: 210 40% 98%;
+                --primary: 217.2 91.2% 59.8%;
+                --primary-foreground: 222.2 84% 4.9%;
+                --secondary: 217.2 32.6% 17.5%;
+                --secondary-foreground: 210 40% 98%;
+                --muted: 217.2 32.6% 17.5%;
+                --muted-foreground: 215 20.2% 65.1%;
+                --accent: 217.2 32.6% 17.5%;
+                --accent-foreground: 210 40% 98%;
+                --destructive: 0 62.8% 30.6%;
+                --destructive-foreground: 210 40% 98%;
+                --border: 217.2 32.6% 17.5%;
+                --input: 217.2 32.6% 17.5%;
+                --ring: 224.3 76.3% 94.1%;
+            }
+
+            * {
+                border-color: hsl(var(--border));
+            }
+
             body {
-                margin: 0;
-                padding: 0;
-                font-family: system-ui, sans-serif;
-                background: #f9fafb;
+                background-color: hsl(var(--background));
+                color: hsl(var(--foreground));
+                font-feature-settings:
+                    "rlig" 1,
+                    "calt" 1;
             }
-            .container {
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 1rem;
-            }
-            h1 {
-                font-size: 1.3rem;
-                text-align: center;
-                margin-bottom: 1rem;
-            }
-            .timer-display {
-                background: #fff;
-                border: 2px solid #4338ca;
-                border-radius: 8px;
-                padding: 1rem;
-                margin-bottom: 1rem;
-                text-align: center;
-                font-size: 1.2rem;
-                font-weight: bold;
-                color: #4338ca;
-            }
-            .status {
-                font-size: 0.9rem;
-                margin-top: 0.5rem;
-                font-weight: normal;
-            }
-            button {
-                display: block;
-                width: 100%;
-                padding: 0.9rem;
-                margin-bottom: 0.6rem;
-                border: 1px solid #c7d2fe;
-                border-radius: 8px;
-                background: #eef2ff;
-                color: #4338ca;
-                font-size: 1rem;
-                font-weight: 600;
-                cursor: pointer;
-            }
-            button:last-child {
-                margin-bottom: 0;
-            }
-            button:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-            .refresh-button {
-                background: #f0f9f0;
-                border: 1px solid #22c55e;
-                color: #16a34a;
-            }
+
             pre#output {
-                margin-top: 1rem;
-                width: calc(100% - 2rem);
-                min-height: 40vh;
-                padding: 1rem;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                background: #fff;
-                font-family: ui-monospace, monospace;
-                font-size: 0.95rem;
-                white-space: pre-wrap;
-                word-break: break-word;
+                font-family:
+                    ui-monospace, SFMono-Regular, "SF Mono", Consolas,
+                    "Liberation Mono", Menlo, monospace;
             }
         </style>
     </head>
-    <body>
-        <div class="container">
-            <h1>PHP WASM LOCAL API Test</h1>
+    <body class="min-h-screen bg-background antialiased">
+        <div class="container max-w-2xl py-8">
+            <div
+                class="rounded-lg border bg-card text-card-foreground shadow-sm p-6 mb-6"
+            >
+                <div class="flex flex-col space-y-1.5 pb-4">
+                    <h1
+                        class="text-2xl font-semibold leading-none tracking-tight text-center"
+                    >
+                        PHP WASM LOCAL API Test
+                    </h1>
+                </div>
 
-            <div class="timer-display">
-                <div id="timerValue">0 ms</div>
-                <div class="status" id="timerStatus">Inicializando...</div>
+                <div
+                    class="flex flex-col items-center justify-center p-4 mb-6 rounded-lg bg-muted/50"
+                >
+                    <div
+                        id="timerValue"
+                        class="text-2xl font-bold text-primary"
+                    >
+                        0 ms
+                    </div>
+                    <div
+                        class="status text-sm text-muted-foreground mt-1"
+                        id="timerStatus"
+                    >
+                        Inicializando...
+                    </div>
+                </div>
+
+                <div class="grid gap-2">
+                    <button
+                        id="btnRefresh"
+                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="mr-2 h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                            ></path>
+                            <path d="M21 3v5h-5"></path>
+                            <path
+                                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                            ></path>
+                            <path d="M8 16H3v5"></path>
+                        </svg>
+                        Refrescar Página
+                    </button>
+
+                    <button
+                        id="btnInline"
+                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="mr-2 h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        Run Inline PHP
+                    </button>
+                    <button
+                        id="btnGet1"
+                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="mr-2 h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                            ></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                        Run GET /script_1.php
+                    </button>
+                    <button
+                        id="btnGet2"
+                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="mr-2 h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        Run GET /server_info.php
+                    </button>
+
+                    <button
+                        id="btnPost"
+                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="mr-2 h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                            ></path>
+                        </svg>
+                        Run POST /process.php
+                    </button>
+                </div>
             </div>
-
-            <button id="btnRefresh" class="refresh-button">
-                🔄 Refrescar Página
-            </button>
-            <button id="btnInline">Run Inline PHP</button>
-            <button id="btnGet1">Run GET /script_1.php</button>
-            <button id="btnGet2">Run GET /server_info.php</button>
-            <button id="btnPost">Run POST /process.php</button>
-
-            <pre id="output">Inicializando PHP Runtime...</pre>
+            <div
+                class="rounded-lg border bg-card text-card-foreground shadow-sm"
+            >
+                <div class="flex flex-col space-y-1.5 p-6 pb-3">
+                    <h3
+                        class="text-lg font-semibold leading-none tracking-tight"
+                    >
+                        Output
+                    </h3>
+                </div>
+                <div class="p-6 pt-0">
+                    <pre
+                        id="output"
+                        style="text-wrap: auto"
+                        class="rounded-md text-sm overflow-auto max-h-96"
+                    >
+Inicializando PHP Runtime...</pre
+                    >
+                </div>
+            </div>
         </div>
 
         <!-- Configuración y timer -->
@@ -124,27 +337,31 @@
         <!-- Configurar PHP Runtime y ejecutar petición automática -->
         <script type="module">
             const outputEl = document.getElementById("output");
-
             function logOutput(label, text) {
                 console.log(label, text);
                 outputEl.textContent += `\n=== ${label} ===\n${text}\n`;
+                // Auto-scroll to bottom
+                outputEl.scrollTop = outputEl.scrollHeight;
             }
-
             try {
                 // Actualizar estado
                 document.getElementById("timerStatus").textContent =
                     "Configurando PHP Runtime...";
-
                 // Configurar PHP Runtime
                 await runPHP.init({
                     DEBUG: true,
                     NUM_WORKERS: 2,
+                    TIMEOUT_WORKER: 1000,
+                    DOCUMENT_ROOT: "/www",
+                    ENTRY_POINT: "",
+                    SERVER_ADDR: "127.0.0.1",
+                    SERVER_NAME: "browser-localhost",
+                    SERVER_SOFTWARE: "wasm-server-0.0.8",
+                    SERVER_PORT: "8080",
                 });
-
                 document.getElementById("timerStatus").textContent =
                     "Ejecutando petición GET automática...";
                 logOutput("INIT", "PHP Runtime inicializado correctamente");
-
                 // Ejecutar petición GET automática al cargar
                 const autoResult = await runPHP.request({
                     method: "GET",
@@ -152,20 +369,12 @@
                     payload: "",
                     headers: "",
                 });
-
                 logOutput("AUTO GET /script_1.php", autoResult);
-
                 // Finalizar timer
                 const totalTime = Math.round(
                     performance.now() - window.pageStartTime,
                 );
                 stopTimer(`¡Completado! Total: ${totalTime} ms`);
-
-                // Habilitar botones
-                const buttons = document.querySelectorAll(
-                    "button:not(#btnRefresh)",
-                );
-                buttons.forEach((btn) => (btn.disabled = false));
             } catch (error) {
                 logOutput(
                     "ERROR",
@@ -178,25 +387,15 @@
         <!-- Scripts de interacción -->
         <script>
             const outputEl = document.getElementById("output");
-
             function logOutput(label, text) {
                 console.log(label, text);
                 outputEl.textContent += `\n=== ${label} ===\n${text}\n`;
+                // Auto-scroll to bottom
+                outputEl.scrollTop = outputEl.scrollHeight;
             }
-
-            // Deshabilitar botones inicialmente
-            window.addEventListener("DOMContentLoaded", () => {
-                const buttons = document.querySelectorAll(
-                    "button:not(#btnRefresh)",
-                );
-                buttons.forEach((btn) => (btn.disabled = true));
-            });
-
-            // Botón de refrescar
             document.getElementById("btnRefresh").onclick = () => {
                 location.reload();
             };
-
             document.getElementById("btnInline").onclick = async () => {
                 const start = performance.now();
                 try {
@@ -209,7 +408,6 @@
                     logOutput("ERROR Inline", error.message);
                 }
             };
-
             document.getElementById("btnGet1").onclick = async () => {
                 const start = performance.now();
                 try {
@@ -225,7 +423,6 @@
                     logOutput("ERROR GET1", error.message);
                 }
             };
-
             document.getElementById("btnGet2").onclick = async () => {
                 const start = performance.now();
                 try {
@@ -241,7 +438,6 @@
                     logOutput("ERROR GET2", error.message);
                 }
             };
-
             document.getElementById("btnPost").onclick = async () => {
                 const start = performance.now();
                 try {

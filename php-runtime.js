@@ -8,6 +8,7 @@ class PhpRuntime {
     this._configDefaults = {
       DEBUG: false,
       NUM_WORKERS: 2,
+      TIMEOUT_WORKER: 1000,
       DOCUMENT_ROOT: "/www",
       ENTRY_POINT: "",
       SERVER_ADDR: "127.0.0.1",
@@ -133,8 +134,8 @@ class PhpRuntime {
     phpWeb = null;
   }
 
-  async spawnWorkers(NUM_WORKERS, wasmBuffer, config) {
-    for (let i = 0; i < NUM_WORKERS; i++) {
+  async spawnWorkers(num_workers, wasmBuffer, config) {
+    for (let i = 0; i < num_workers; i++) {
       const worker = new Worker(new URL("./php-worker.js", import.meta.url), {
         type: "module",
       });
@@ -192,7 +193,7 @@ class PhpRuntime {
     await this.spawnWorkers(this._config.NUM_WORKERS, wasmBin, this._config);
   }
 
-  runInline(code, timeout = 5000) {
+  runInline(code, timeout = this._config.TIMEOUT_WORKER) {
     return new Promise((resolve, reject) => {
       const id = this._nextId++;
       const timer = setTimeout(
@@ -213,7 +214,10 @@ class PhpRuntime {
     });
   }
 
-  runRequest({ method, query, payload, headers }, timeout = 5000) {
+  runRequest(
+    { method, query, payload, headers },
+    timeout = this._config.TIMEOUT_WORKER,
+  ) {
     return new Promise((resolve, reject) => {
       const id = this._nextId++;
       const timer = setTimeout(
