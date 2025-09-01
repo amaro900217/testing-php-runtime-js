@@ -42,6 +42,7 @@ Opción          | Descripción                    | Default
 ----------------|--------------------------------|------------------
 DEBUG           | Activar logging detallado      | false
 NUM_WORKERS     | Número de workers concurrentes | 2
+TIMEOUT_WORKER  | Timeout para cada worker       | 1000
 DOCUMENT_ROOT   | Ruta raíz PHP                  | /www
 ENTRY_POINT     | Script PHP por defecto         | ""
 SERVER_ADDR     | IP del servidor virtual        | 127.0.0.1
