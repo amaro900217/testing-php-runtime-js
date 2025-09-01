@@ -10,8 +10,8 @@ class PhpWorker {
     this.wasmBuffer = null;
     this.initialized = false;
     this.log = this.log.bind(this);
-    self.onmessage = this.onMessage;
     this.onMessage = this.onMessage.bind(this);
+    self.onmessage = this.onMessage;
   }
 
   log(...args) {
