@@ -22,36 +22,47 @@ class PhpWorker {
       payload,
       headersStr,
     });
+    const phpParts = [];
     const headers = this.parseHeaders(headersStr);
     const [requestUri, queryString = ""] = (query ?? "").split("?");
     const contentType =
       headers["Content-Type"] || "application/x-www-form-urlencoded";
-    let php = this.buildServerVariables(
-      method,
-      requestUri,
-      queryString,
-      contentType,
-      payload,
+    phpParts.push(
+      this.buildServerVariables(
+        method,
+        requestUri,
+        queryString,
+        contentType,
+        payload,
+      ),
     );
-    php += this.buildHeaderVariables(headers);
-    php += this.buildConfigVariables(config);
+    phpParts.push(this.buildHeaderVariables(headers));
+    phpParts.push(this.buildConfigVariables(config));
     if (method === "GET" && query) {
-      php += this.buildGetVariables(query);
+      phpParts.push(this.buildGetVariables(query));
     }
     if (method === "POST" && payload) {
-      php += this.buildPostVariables(payload);
+      phpParts.push(this.buildPostVariables(payload));
     }
-    return php;
+    return phpParts.join("");
   }
 
   parseHeaders(headersStr) {
     const headers = {};
-    if (headersStr?.trim()) {
-      headersStr.split(";").forEach((h) => {
-        if (!h.trim()) return;
-        const [key, ...rest] = h.split(":");
-        headers[key.trim()] = rest.join(":").trim();
-      });
+    if (!headersStr) return headers;
+    let start = 0;
+    const len = headersStr.length;
+    for (let i = 0; i <= len; i++) {
+      if (i === len || headersStr[i] === ";") {
+        let part = headersStr.slice(start, i).trim();
+        start = i + 1;
+        if (!part) continue;
+        const colonIndex = part.indexOf(":");
+        if (colonIndex === -1) continue; // ignorar si no hay ":"
+        const key = part.slice(0, colonIndex).trim();
+        const value = part.slice(colonIndex + 1).trim();
+        headers[key] = value;
+      }
     }
     return headers;
   }
@@ -70,56 +81,62 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
   }
 
   buildHeaderVariables(headers) {
-    let php = "";
+    const phpParts = [];
     for (const key in headers) {
       const keyFormatted = "HTTP_" + key.toUpperCase().replace(/-/g, "_");
-      php += `$_SERVER['${keyFormatted}'] = '${headers[key]}';\n`;
+      phpParts.push(`$_SERVER['${keyFormatted}'] = '${headers[key]}';\n`);
     }
-    return php;
+    return phpParts.join("");
   }
 
   buildConfigVariables(config) {
-    let php = "";
+    const phpParts = [];
     for (const key in config) {
       const val = config[key];
       if (typeof val === "boolean") {
-        php += `$_SERVER['${key}'] = ${val ? "true" : "false"};\n`;
+        phpParts.push(`$_SERVER['${key}'] = ${val ? "true" : "false"};\n`);
       } else if (typeof val === "number") {
-        php += `$_SERVER['${key}'] = ${val};\n`;
+        phpParts.push(`$_SERVER['${key}'] = ${val};\n`);
       } else {
-        php += `$_SERVER['${key}'] = '${val.toString().replace(/'/g, "\\'")}';\n`;
+        // Reemplazo de comillas simples
+        const strVal = String(val).replace(/'/g, "\\'");
+        phpParts.push(`$_SERVER['${key}'] = '${strVal}';\n`);
       }
     }
-    return php;
+    return phpParts.join("");
+  }
+
+  escapePhp(str) {
+    return typeof str === "string" ? str.replace(/'/g, "\\'") : str;
   }
 
   buildGetVariables(query) {
-    let php = "";
+    const phpParts = [];
     const queryString = query.split("?")[1] || "";
     const params = new URLSearchParams(queryString);
     for (const [key, value] of params.entries()) {
-      php += `$_GET['${key}'] = '${value.replace(/'/g, "\\'")}';\n`;
+      phpParts.push(`$_GET['${key}'] = '${this.escapePhp(value)}';\n`);
     }
-    return php;
+    return phpParts.join("");
   }
 
   buildPostVariables(payload) {
-    let php = "";
+    const phpParts = [];
     const params = new URLSearchParams(payload);
     for (const [key, value] of params.entries()) {
-      php += `$_POST['${key}'] = '${value.replace(/'/g, "\\'")}';\n`;
+      phpParts.push(`$_POST['${key}'] = '${this.escapePhp(value)}';\n`);
     }
-    return php;
+    return phpParts.join("");
   }
 
   captureOutput() {
-    let buffer = "";
+    const chunks = [];
     const onOutput = (e) => {
-      buffer += e.detail;
+      chunks.push(e.detail);
       this.log("📤 PHP output chunk", e.detail);
     };
     const onError = (e) => {
-      buffer += e.detail;
+      chunks.push(e.detail);
       this.log("⚠️ PHP error chunk", e.detail);
     };
     this.phpWeb.addEventListener("output", onOutput);
@@ -129,22 +146,21 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
         this.phpWeb.removeEventListener("output", onOutput);
         this.phpWeb.removeEventListener("error", onError);
       },
-      get: () => buffer,
+      get: () => chunks.join(""),
     };
   }
 
   async loadWasm(wasmBin, config) {
-    if (!this.phpWeb) {
-      this.phpWeb = new PhpWeb({
-        wasmBinary: wasmBin,
-        persist: { mountPath: "/www" },
-      });
-      await this.phpWeb.ready;
-      this.config = { ...config };
-      this.initialized = true;
-      this.log("✅ PhpWeb WASM loaded and ready");
-      self.postMessage({ type: "workerReady" });
-    }
+    if (this.phpWeb) return;
+    this.phpWeb = new PhpWeb({
+      wasmBinary: wasmBin,
+      persist: { mountPath: "/www" },
+    });
+    await this.phpWeb.ready;
+    this.config = { ...config };
+    this.initialized = true;
+    this.log("✅ PhpWeb WASM loaded and ready");
+    self.postMessage({ type: "workerReady" });
   }
 
   async runInline(id, code) {
@@ -189,7 +205,7 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
   }
 
   async onMessage(e) {
-    const msg = e.data;
+    const { data: msg } = e;
     this.log("📨 Received message", msg);
     if (msg.type === "loadWasm") {
       await this.loadWasm(msg.wasmBin, msg.cnfg);
@@ -199,13 +215,11 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
       this.log("⚠️ Worker not initialized yet");
       return;
     }
-    switch (msg.type) {
-      case "runInline":
-        await this.runInline(msg.id, msg.request.code);
-        break;
-      case "runRequest":
-        await this.runRequest(msg.id, msg.request);
-        break;
+    const { id, request } = msg;
+    if (msg.type === "runInline") {
+      await this.runInline(id, request.code);
+    } else {
+      await this.runRequest(id, request);
     }
   }
 }

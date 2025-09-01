@@ -4,192 +4,323 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>PHP WASM LOCAL API Tests</title>
-
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script>
-            tailwind.config = {
-                darkMode: ["class"],
-                theme: {
-                    container: {
-                        center: true,
-                        padding: "2rem",
-                        screens: {
-                            "2xl": "1400px",
-                        },
-                    },
-                    extend: {
-                        colors: {
-                            border: "hsl(var(--border))",
-                            input: "hsl(var(--input))",
-                            ring: "hsl(var(--ring))",
-                            background: "hsl(var(--background))",
-                            foreground: "hsl(var(--foreground))",
-                            primary: {
-                                DEFAULT: "hsl(var(--primary))",
-                                foreground: "hsl(var(--primary-foreground))",
-                            },
-                            secondary: {
-                                DEFAULT: "hsl(var(--secondary))",
-                                foreground: "hsl(var(--secondary-foreground))",
-                            },
-                            destructive: {
-                                DEFAULT: "hsl(var(--destructive))",
-                                foreground:
-                                    "hsl(var(--destructive-foreground))",
-                            },
-                            muted: {
-                                DEFAULT: "hsl(var(--muted))",
-                                foreground: "hsl(var(--muted-foreground))",
-                            },
-                            accent: {
-                                DEFAULT: "hsl(var(--accent))",
-                                foreground: "hsl(var(--accent-foreground))",
-                            },
-                            popover: {
-                                DEFAULT: "hsl(var(--popover))",
-                                foreground: "hsl(var(--popover-foreground))",
-                            },
-                            card: {
-                                DEFAULT: "hsl(var(--card))",
-                                foreground: "hsl(var(--card-foreground))",
-                            },
-                        },
-                        borderRadius: {
-                            lg: "var(--radius)",
-                            md: "calc(var(--radius) - 2px)",
-                            sm: "calc(var(--radius) - 4px)",
-                        },
-                        keyframes: {
-                            "accordion-down": {
-                                from: { height: 0 },
-                                to: {
-                                    height: "var(--radix-accordion-content-height)",
-                                },
-                            },
-                            "accordion-up": {
-                                from: {
-                                    height: "var(--radix-accordion-content-height)",
-                                },
-                                to: { height: 0 },
-                            },
-                        },
-                        animation: {
-                            "accordion-down": "accordion-down 0.2s ease-out",
-                            "accordion-up": "accordion-up 0.2s ease-out",
-                        },
-                    },
-                },
-            };
-        </script>
         <style>
+            /* Variables de color para modo claro (sigue la estructura, pero se prioriza el oscuro) */
             :root {
-                --background: 0 0% 100%;
-                --foreground: 222.2 84% 4.9%;
-                --card: 0 0% 100%;
-                --card-foreground: 222.2 84% 4.9%;
-                --popover: 0 0% 100%;
-                --popover-foreground: 222.2 84% 4.9%;
-                --primary: 221.2 83.2% 53.3%;
-                --primary-foreground: 210 40% 98%;
-                --secondary: 210 40% 96%;
-                --secondary-foreground: 222.2 84% 4.9%;
-                --muted: 210 40% 96%;
-                --muted-foreground: 215.4 16.3% 46.9%;
-                --accent: 210 40% 96%;
-                --accent-foreground: 222.2 84% 4.9%;
-                --destructive: 0 84.2% 60.2%;
-                --destructive-foreground: 210 40% 98%;
-                --border: 214.3 31.8% 91.4%;
-                --input: 214.3 31.8% 91.4%;
-                --ring: 221.2 83.2% 53.3%;
-                --radius: 0.5rem;
+                --background: hsl(210, 20%, 98%); /* Gris muy claro */
+                --foreground: hsl(210, 10%, 20%); /* Gris oscuro */
+                --card: hsl(0, 0%, 100%); /* Blanco puro para tarjetas */
+                --card-foreground: hsl(210, 10%, 20%);
+                --primary: hsl(210, 70%, 45%); /* Azul primario */
+                --primary-foreground: hsl(0, 0%, 100%);
+                --secondary: hsl(210, 20%, 92%); /* Gris claro para botones */
+                --secondary-foreground: hsl(210, 10%, 20%);
+                --muted: hsl(
+                    210,
+                    20%,
+                    92%
+                ); /* Gris claro para fondos sutiles */
+                --muted-foreground: hsl(
+                    210,
+                    10%,
+                    45%
+                ); /* Gris medio para texto secundario */
+                --border: hsl(210, 15%, 85%); /* Borde gris suave */
+                --input: hsl(210, 15%, 85%);
+                --ring: hsl(210, 70%, 45%);
+                --destructive: hsl(0, 80%, 55%); /* Rojo */
+                --destructive-foreground: hsl(0, 0%, 100%);
+                --radius: 12px;
+                --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             }
 
-            .dark {
-                --background: 222.2 84% 4.9%;
-                --foreground: 210 40% 98%;
-                --card: 222.2 84% 4.9%;
-                --card-foreground: 210 40% 98%;
-                --popover: 222.2 84% 4.9%;
-                --popover-foreground: 210 40% 98%;
-                --primary: 217.2 91.2% 59.8%;
-                --primary-foreground: 222.2 84% 4.9%;
-                --secondary: 217.2 32.6% 17.5%;
-                --secondary-foreground: 210 40% 98%;
-                --muted: 217.2 32.6% 17.5%;
-                --muted-foreground: 215 20.2% 65.1%;
-                --accent: 217.2 32.6% 17.5%;
-                --accent-foreground: 210 40% 98%;
-                --destructive: 0 62.8% 30.6%;
-                --destructive-foreground: 210 40% 98%;
-                --border: 217.2 32.6% 17.5%;
-                --input: 217.2 32.6% 17.5%;
-                --ring: 224.3 76.3% 94.1%;
+            /* Variables de color para modo oscuro (Android Dark Theme Style) */
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --background: hsl(
+                        220,
+                        15%,
+                        8%
+                    ); /* Fondo muy oscuro, casi negro azulado */
+                    --foreground: hsl(
+                        210,
+                        20%,
+                        90%
+                    ); /* Texto principal, gris claro */
+                    --card: hsl(
+                        220,
+                        15%,
+                        12%
+                    ); /* Tarjetas, un poco más claras que el fondo */
+                    --card-foreground: hsl(210, 20%, 90%);
+                    --primary: hsl(
+                        210,
+                        70%,
+                        65%
+                    ); /* Azul brillante, pero no saturado */
+                    --primary-foreground: hsl(220, 15%, 8%);
+                    --secondary: hsl(220, 15%, 20%); /* Botones, gris oscuro */
+                    --secondary-foreground: hsl(210, 20%, 90%);
+                    --muted: hsl(220, 15%, 20%); /* Fondos sutiles */
+                    --muted-foreground: hsl(
+                        210,
+                        10%,
+                        70%
+                    ); /* Texto secundario, gris medio */
+                    --border: hsl(220, 15%, 25%); /* Bordes */
+                    --input: hsl(220, 15%, 25%);
+                    --ring: hsl(210, 70%, 65%);
+                    --destructive: hsl(0, 80%, 65%);
+                    --destructive-foreground: hsl(220, 15%, 8%);
+                    --shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* Sombras más visibles en oscuro */
+                }
             }
+            /* --- */
 
-            * {
-                border-color: hsl(var(--border));
+            /* Estilos globales y reseteo */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
             }
 
             body {
-                background-color: hsl(var(--background));
-                color: hsl(var(--foreground));
-                font-feature-settings:
-                    "rlig" 1,
-                    "calt" 1;
+                margin: 0;
+                font-family:
+                    "Google Sans",
+                    "Inter",
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    Roboto,
+                    "Helvetica Neue",
+                    Arial,
+                    sans-serif;
+                background-color: var(--background);
+                color: var(--foreground);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                -webkit-font-smoothing: antialiased;
+                padding: 1.5rem 1rem; /* Más padding para mobile */
+                transition:
+                    background-color 0.3s,
+                    color 0.3s;
+                line-height: 1.5; /* Mejor legibilidad */
             }
 
+            .container {
+                width: 100%;
+                max-width: 640px; /* Un poco más ancho para el contenido */
+                margin: 0 auto;
+                display: flex;
+                flex-direction: column;
+                gap: 1.75rem; /* Más espacio entre las tarjetas */
+            }
+
+            /* Estilos de la tarjeta (Card) */
+            .card {
+                background-color: var(--card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 2.5rem 1.75rem; /* Más padding para un look más "premium" */
+                box-shadow: var(--shadow);
+                transition:
+                    box-shadow 0.3s,
+                    background-color 0.3s,
+                    border-color 0.3s;
+            }
+
+            /* --- */
+
+            /* Encabezados y títulos */
+            h1,
+            h3 {
+                margin: 0;
+                font-weight: 600;
+                line-height: 1.2;
+            }
+
+            h1 {
+                font-size: 2rem; /* Tamaño de fuente más grande */
+                text-align: center;
+                margin-bottom: 2rem; /* Más espacio debajo del título */
+                color: var(--primary);
+                letter-spacing: -0.04em; /* Letter spacing más ajustado */
+            }
+
+            h3 {
+                font-size: 1.35rem; /* Tamaño de fuente del subtítulo ajustado */
+                font-weight: 500;
+                margin-bottom: 1.25rem; /* Más espacio debajo del subtítulo */
+                color: var(--foreground);
+            }
+            /* --- */
+
+            /* Temporizador */
+            .timer {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem 1rem; /* Más padding */
+                margin-bottom: 2rem; /* Más espacio debajo del timer */
+                border-radius: var(--radius);
+                background-color: var(--muted);
+                width: 100%;
+                text-align: center;
+            }
+
+            .timer-value {
+                font-size: 2.8rem; /* Tamaño de fuente más grande */
+                font-weight: 700;
+                color: var(--primary);
+                letter-spacing: -1.5px;
+            }
+
+            .timer-status {
+                font-size: 1rem; /* Tamaño de fuente ajustado */
+                margin-top: 0.75rem; /* Más espacio */
+                color: var(--muted-foreground);
+            }
+            /* --- */
+
+            /* Botones */
+            .buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 1.25rem; /* Más espacio entre los botones */
+            }
+
+            button {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1rem; /* Tamaño de fuente un poco más grande */
+                font-weight: 500;
+                border-radius: 9999px; /* Botones pill */
+                padding: 0 1.75rem; /* Más padding horizontal */
+                height: 3.25rem; /* Altura del botón ajustada */
+                cursor: pointer;
+                border: none;
+                background-color: var(--secondary);
+                color: var(--secondary-foreground);
+                outline: none;
+                border-radius: 9999px;
+                outline: none; /* Elimina la línea azul/cuadrada */
+                -webkit-tap-highlight-color: transparent; /* Elimina highlight en Android/iOS */
+            }
+
+            button:hover {
+                background-color: var(
+                    --primary
+                ); /* El hover ahora es el color primario */
+                color: var(--primary-foreground);
+                border-radius: 9999px;
+            }
+
+            button:active {
+                transform: translateY(0);
+                border-radius: 9999px;
+                background-color: var(
+                    --primary
+                ); /* Asegura que se mantiene el color primario */
+                color: var(--primary-foreground);
+            }
+
+            button:focus-visible {
+                outline: 2px solid var(--primary);
+                outline-offset: 2px;
+                border-radius: 9999px;
+            }
+
+            button svg {
+                margin-right: 0.85rem; /* Más espacio para el ícono */
+                width: 1.35rem; /* Iconos un poco más grandes */
+                height: 1.35rem;
+                stroke-width: 2;
+                opacity: 0.9; /* Opacidad sutil */
+            }
+            /* --- */
+
+            /* Área de salida (Output) */
             pre#output {
                 font-family:
-                    ui-monospace, SFMono-Regular, "SF Mono", Consolas,
-                    "Liberation Mono", Menlo, monospace;
+                    "Roboto Mono", "Fira Mono", "Menlo", "Consolas", monospace;
+                font-size: 0.95rem; /* Tamaño de fuente ligeramente más grande */
+                overflow: auto;
+                max-height: 28rem; /* Altura máxima un poco más grande */
+                background-color: var(--muted);
+                color: var(--muted-foreground);
+                padding: 1.5rem; /* Más padding */
+                border-radius: var(--radius);
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                line-height: 1.6;
+            }
+            /* --- */
+
+            /* Media Queries para escritorio */
+            @media (min-width: 768px) {
+                body {
+                    padding: 3rem;
+                }
+                .container {
+                    gap: 2.5rem;
+                }
+                .card {
+                    padding: 3.5rem 2.5rem; /* Más padding para escritorio */
+                }
+                h1 {
+                    font-size: 2.8rem;
+                    margin-bottom: 2.5rem;
+                }
+                h3 {
+                    font-size: 1.5rem;
+                }
+                .timer {
+                    padding: 2.5rem 1.5rem;
+                    margin-bottom: 2.5rem;
+                }
+                .timer-value {
+                    font-size: 3.2rem;
+                }
+                .buttons {
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 1.75rem;
+                }
+                button {
+                    height: 3.5rem;
+                }
             }
         </style>
     </head>
-    <body class="min-h-screen bg-background antialiased">
-        <div class="container max-w-2xl py-8">
-            <div
-                class="rounded-lg border bg-card text-card-foreground shadow-sm p-6 mb-6"
-            >
-                <div class="flex flex-col space-y-1.5 pb-4">
-                    <h1
-                        class="text-2xl font-semibold leading-none tracking-tight text-center"
-                    >
-                        PHP WASM LOCAL API Tests
-                    </h1>
-                </div>
-
-                <div
-                    class="flex flex-col items-center justify-center p-4 mb-6 rounded-lg bg-muted/50"
-                >
-                    <div
-                        id="timerValue"
-                        class="text-2xl font-bold text-primary"
-                    >
-                        0 ms
-                    </div>
-                    <div
-                        class="status text-sm text-muted-foreground mt-1"
-                        id="timerStatus"
-                    >
+    <body>
+        <div class="container">
+            <div class="card">
+                <h1>
+                    PHP WASM <br />
+                    Local API Tests
+                </h1>
+                <div class="timer">
+                    <div id="timerValue" class="timer-value">0 ms</div>
+                    <div id="timerStatus" class="timer-status">
                         Inicializando...
                     </div>
                 </div>
 
-                <div class="grid gap-2">
-                    <button
-                        id="btnRefresh"
-                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
-                    >
+                <div class="buttons">
+                    <button id="btnRefresh">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="mr-2 h-4 w-4"
-                            viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
                             stroke-linecap="round"
                             stroke-linejoin="round"
+                            viewBox="0 0 24 24"
                         >
                             <path
                                 d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
@@ -203,38 +334,31 @@
                         Refrescar Página
                     </button>
 
-                    <button
-                        id="btnInline"
-                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
-                    >
+                    <button id="btnInline">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="mr-2 h-4 w-4"
-                            viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
                             stroke-linecap="round"
                             stroke-linejoin="round"
+                            viewBox="0 0 24 24"
                         >
                             <polyline points="16 18 22 12 16 6"></polyline>
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
                         Run Inline PHP
                     </button>
-                    <button
-                        id="btnGet1"
-                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
-                    >
+
+                    <button id="btnGet1">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="mr-2 h-4 w-4"
-                            viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
                             stroke-linecap="round"
                             stroke-linejoin="round"
+                            viewBox="0 0 24 24"
                         >
                             <path
                                 d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
@@ -244,19 +368,16 @@
                         </svg>
                         Run GET /script_1.php
                     </button>
-                    <button
-                        id="btnGet2"
-                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
-                    >
+
+                    <button id="btnGet2">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="mr-2 h-4 w-4"
-                            viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
                             stroke-linecap="round"
                             stroke-linejoin="round"
+                            viewBox="0 0 24 24"
                         >
                             <circle cx="12" cy="12" r="10"></circle>
                             <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -265,19 +386,15 @@
                         Run GET /server_info.php
                     </button>
 
-                    <button
-                        id="btnPost"
-                        class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2"
-                    >
+                    <button id="btnPost">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="mr-2 h-4 w-4"
-                            viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
                             stroke-linecap="round"
                             stroke-linejoin="round"
+                            viewBox="0 0 24 24"
                         >
                             <path
                                 d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
@@ -287,29 +404,12 @@
                     </button>
                 </div>
             </div>
-            <div
-                class="rounded-lg border bg-card text-card-foreground shadow-sm"
-            >
-                <div class="flex flex-col space-y-1.5 p-6 pb-3">
-                    <h3
-                        class="text-lg font-semibold leading-none tracking-tight"
-                    >
-                        Output
-                    </h3>
-                </div>
-                <div class="p-6 pt-0">
-                    <pre
-                        id="output"
-                        style="text-wrap: auto"
-                        class="rounded-md text-sm overflow-auto max-h-96 bg-muted p-2"
-                    >
-Inicializando PHP Runtime...</pre
-                    >
-                </div>
+
+            <div class="card">
+                <h3>Output</h3>
+                <pre id="output">Inicializando PHP Runtime...</pre>
             </div>
         </div>
-
-        <!-- Configuración y timer -->
         <script>
             window.pageStartTime = performance.now();
             window.timerInterval = null;
@@ -331,10 +431,8 @@ Inicializando PHP Runtime...</pre
             }
         </script>
 
-        <!-- Cargar la librería -->
         <script src="php-runtime.js" type="module"></script>
 
-        <!-- Configurar PHP Runtime y ejecutar petición automática -->
         <script type="module">
             const outputEl = document.getElementById("output");
             function logOutput(label, text) {
@@ -351,7 +449,7 @@ Inicializando PHP Runtime...</pre
                 await runPHP.init({
                     DEBUG: true,
                     NUM_WORKERS: 2,
-                    TIMEOUT_WORKER: 1000,
+                    TIMEOUT_WORKER: 15000,
                     DOCUMENT_ROOT: "/www",
                     ENTRY_POINT: "",
                     SERVER_ADDR: "127.0.0.1",
@@ -361,7 +459,12 @@ Inicializando PHP Runtime...</pre
                 });
                 document.getElementById("timerStatus").textContent =
                     "Ejecutando petición GET automática...";
-                logOutput("INIT", "PHP Runtime inicializado correctamente");
+                logOutput(
+                    "INIT",
+                    "PHP Runtime inicializado correctamente en " +
+                        Math.round(performance.now() - window.pageStartTime) +
+                        " ms",
+                );
                 // Ejecutar petición GET automática al cargar
                 const autoResult = await runPHP.request({
                     method: "GET",
@@ -369,7 +472,7 @@ Inicializando PHP Runtime...</pre
                     payload: "",
                     headers: "",
                 });
-                logOutput("AUTO GET /script_1.php", autoResult);
+                logOutput("AUTO GET /script_1.0.php", autoResult);
                 // Finalizar timer
                 const totalTime = Math.round(
                     performance.now() - window.pageStartTime,
@@ -384,7 +487,6 @@ Inicializando PHP Runtime...</pre
             }
         </script>
 
-        <!-- Scripts de interacción -->
         <script>
             const outputEl = document.getElementById("output");
             function logOutput(label, text) {

@@ -32,10 +32,13 @@ class PhpRuntime {
   }
 
   async installWasmBin() {
+    // Retornar cache si ya está cargado
     if (this._wasmBuffer) return this._wasmBuffer;
+
+    // Promesa única para llamadas concurrentes
     if (!this._wasmBufferPromise) {
       this._wasmBufferPromise = (async () => {
-        // --- Reutilizar conexión IndexedDB en memoria ---
+        // --- Abrir IndexedDB si no existe ---
         if (!this._db) {
           this._db = await new Promise((resolve, reject) => {
             const request = indexedDB.open("/wasm", 1);
@@ -49,6 +52,15 @@ class PhpRuntime {
           });
         }
         const db = this._db;
+
+        // --- Iniciar descarga en paralelo ---
+        const fetchPromise = fetch("/assets/wasm/php-web.js.wasm.gz").then(
+          async (res) => {
+            if (!res.ok)
+              throw new Error(`❌ Failed to download WASM: ${res.status}`);
+            return new Uint8Array(await res.arrayBuffer());
+          },
+        );
 
         // --- Buscar en IndexedDB ---
         const exists = await new Promise((resolve) => {
@@ -65,13 +77,11 @@ class PhpRuntime {
           return exists;
         }
 
-        // --- Descargar y descomprimir ---
+        // --- Esperar la descarga si no estaba en IndexedDB ---
         this.log("⬇️ Downloading WASM...");
-        const response = await fetch("/assets/wasm/php-web.js.wasm.gz");
-        if (!response.ok)
-          throw new Error(`❌ Failed to download WASM: ${response.status}`);
+        const compressed = await fetchPromise;
 
-        const compressed = new Uint8Array(await response.arrayBuffer());
+        // --- Descomprimir el buffer ---
         const wasmBuffer = gunzipSync(compressed);
         this._wasmBuffer = wasmBuffer;
 
@@ -92,17 +102,21 @@ class PhpRuntime {
   }
 
   async installPhpFiles(wasmBuffer) {
+    // --- Inicializar PhpWeb ---
     let phpWeb = new PhpWeb({
       wasmBinary: wasmBuffer,
       persist: { mountPath: "/www" },
     });
     await phpWeb.ready;
     const phpBin = await phpWeb.binary;
+
+    // --- Verificar si ya está instalado ---
     let alreadyInstalled = false;
     try {
       phpBin.FS.stat("/www/INSTALLED.txt");
       alreadyInstalled = true;
     } catch {}
+
     if (alreadyInstalled) {
       this.log("✅ PHP project already installed, skipping ZIP installation");
       await new Promise((resolve, reject) => {
@@ -110,22 +124,33 @@ class PhpRuntime {
       });
       return;
     }
+
+    // --- Descargar php.zip ---
     this.log("⬇️ Downloading php.zip...");
-    const response = await fetch("/assets/www/php.zip");
-    if (!response.ok)
-      throw new Error(`❌ Failed to download php.zip: ${response.statusText}`);
-    const zipData = await response.arrayBuffer();
+    const fetchPromise = fetch("/assets/www/php.zip").then(async (res) => {
+      if (!res.ok)
+        throw new Error(`❌ Failed to download php.zip: ${res.statusText}`);
+      return new Uint8Array(await res.arrayBuffer());
+    });
+
+    const zipData = await fetchPromise;
+
+    // --- Descomprimir ZIP asíncronamente ---
     await new Promise((resolve, reject) => {
-      unzip(new Uint8Array(zipData), (err, files) => {
+      unzip(zipData, async (err, files) => {
         if (err) return reject(err);
+
         try {
           for (const relativePath in files) {
             const content = files[relativePath];
             const fullPath = `/www/${relativePath}`;
             const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+
+            // Crear directorios padres si no existen
             try {
               phpBin.FS.mkdirTree(parentDir);
             } catch {}
+
             if (content.length === 0 && relativePath.endsWith("/")) {
               try {
                 phpBin.FS.mkdir(fullPath);
@@ -138,13 +163,18 @@ class PhpRuntime {
               phpBin.FS.writeFile(fullPath, data);
             }
           }
+
+          // --- Sincronizar FS ---
           phpBin.FS.syncfs(false, (err) => (err ? reject(err) : resolve()));
         } catch (err) {
           reject(err);
         }
       });
     });
+
     this.log("✅ PHP project installed and synced");
+
+    // Liberar memoria
     phpWeb = null;
   }
 
