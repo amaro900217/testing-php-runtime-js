@@ -12,11 +12,11 @@ Your PHP application files should be placed inside a zip archive located at `ass
 
 <!-- Configure the PHP Runtime -->
 <script type="module">
-    await runPHP.init({
-        DEBUG: true,
-        NUM_WORKERS: 2
-        // ...
-    });
+  await runPHP.init({
+    DEBUG: true,
+    NUM_WORKERS: 2
+    // ...
+  });
 </script>
 ```
 
@@ -24,19 +24,23 @@ Your PHP application files should be placed inside a zip archive located at `ass
 
 ### Execute Inline PHP Code
 ```javascript
-const result = await runPHP.inline('<?php echo "Hello from PHP!"; ?>');
-console.log(result);
+<script>
+  const result = await runPHP.inline('<?php echo "Hello from PHP!"; ?>');
+  console.log(result);
+</script>
 ```
 
-### Make an HTTP Request
+### Make an HTTP-Like Request
 ```javascript
-const result = await runPHP.request({
-    method: "POST",
-    query: "/index.php?user=test",
-    payload: "name=test&value=123",
-    headers: "Content-Type: application/x-www-form-urlencoded"
-});
-console.log(result);
+<script>
+  const result = await runPHP.request({
+      method: "POST",
+      query: "/index.php?user=test",
+      payload: "name=test&value=123",
+      headers: "Content-Type: application/x-www-form-urlencoded"
+  });
+  console.log(result);
+</script>
 ```
 
 ## Configuration
