@@ -15,6 +15,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
     await runPHP.init({
         DEBUG: true,
         NUM_WORKERS: 2
+        // ...
     });
 </script>
 ```
