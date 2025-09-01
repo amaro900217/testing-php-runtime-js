@@ -20,6 +20,22 @@
                 text-align: center;
                 margin-bottom: 1rem;
             }
+            .timer-display {
+                background: #fff;
+                border: 2px solid #4338ca;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                text-align: center;
+                font-size: 1.2rem;
+                font-weight: bold;
+                color: #4338ca;
+            }
+            .status {
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+                font-weight: normal;
+            }
             button {
                 display: block;
                 width: 100%;
@@ -35,6 +51,15 @@
             }
             button:last-child {
                 margin-bottom: 0;
+            }
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .refresh-button {
+                background: #f0f9f0;
+                border: 1px solid #22c55e;
+                color: #16a34a;
             }
             pre#output {
                 margin-top: 1rem;
@@ -55,86 +80,183 @@
         <div class="container">
             <h1>PHP WASM LOCAL API Test</h1>
 
+            <div class="timer-display">
+                <div id="timerValue">0 ms</div>
+                <div class="status" id="timerStatus">Inicializando...</div>
+            </div>
+
+            <button id="btnRefresh" class="refresh-button">
+                🔄 Refrescar Página
+            </button>
             <button id="btnInline">Run Inline PHP</button>
             <button id="btnGet1">Run GET /script_1.php</button>
             <button id="btnGet2">Run GET /server_info.php</button>
             <button id="btnPost">Run POST /process.php</button>
 
-            <pre id="output">Salida…</pre>
+            <pre id="output">Inicializando PHP Runtime...</pre>
         </div>
 
-        <!-- Configuración -->
+        <!-- Configuración y timer -->
         <script>
-            window.benchmarkStart = performance.now();
+            window.pageStartTime = performance.now();
+            window.timerInterval = null;
+
+            // Función para actualizar el timer
+            function updateTimer() {
+                const elapsed = performance.now() - window.pageStartTime;
+                document.getElementById("timerValue").textContent =
+                    `${Math.round(elapsed)} ms`;
+            }
+
+            // Iniciar el timer
+            window.timerInterval = setInterval(updateTimer, 10);
+
+            // Función para finalizar el timer
+            function stopTimer(message) {
+                clearInterval(window.timerInterval);
+                document.getElementById("timerStatus").textContent = message;
+            }
         </script>
 
         <!-- Cargar la librería -->
         <script src="php-runtime.js" type="module"></script>
 
-        <!-- Configurar PHP Runtime -->
+        <!-- Configurar PHP Runtime y ejecutar petición automática -->
         <script type="module">
-            // Primero configuramos
-            await runPHP.init({
-                DEBUG: true,
-                NUM_WORKERS: 2,
-            });
-        </script>
-
-        <!--
-        <script type="module">
-            // Ejecutar código PHP directamente
-            runPHP.inline('<?php echo "Hola Mundo!"; ?>').then((result) =>
-                console.log(result),
-            );
-            // O simular una petición HTTP
-            runPHP.request({
-                method: "POST",
-                query: "/test.php?id=1",
-                payload: "name=test",
-                headers: "Content-Type: application/x-www-form-urlencoded",
-            }).then((result) => console.log(result));
-        </script>
-        -->
-
-        <!-- Scripts de interacción -->
-        <script>
             const outputEl = document.getElementById("output");
+
             function logOutput(label, text) {
                 console.log(label, text);
                 outputEl.textContent += `\n=== ${label} ===\n${text}\n`;
             }
-            document.getElementById("btnInline").onclick = async () => {
-                const result = await runPHP.inline(
-                    '<?php echo "Hola desde Inline PHP"; ?>',
-                );
-                logOutput("Inline PHP", result);
-            };
-            document.getElementById("btnGet1").onclick = async () => {
-                const result = await runPHP.request({
+
+            try {
+                // Actualizar estado
+                document.getElementById("timerStatus").textContent =
+                    "Configurando PHP Runtime...";
+
+                // Configurar PHP Runtime
+                await runPHP.init({
+                    DEBUG: true,
+                    NUM_WORKERS: 2,
+                });
+
+                document.getElementById("timerStatus").textContent =
+                    "Ejecutando petición GET automática...";
+                logOutput("INIT", "PHP Runtime inicializado correctamente");
+
+                // Ejecutar petición GET automática al cargar
+                const autoResult = await runPHP.request({
                     method: "GET",
                     query: "/www/php/script_1.php",
                     payload: "",
                     headers: "",
                 });
-                logOutput("GET /script_1.php", result);
+
+                logOutput("AUTO GET /script_1.php", autoResult);
+
+                // Finalizar timer
+                const totalTime = Math.round(
+                    performance.now() - window.pageStartTime,
+                );
+                stopTimer(`¡Completado! Total: ${totalTime} ms`);
+
+                // Habilitar botones
+                const buttons = document.querySelectorAll(
+                    "button:not(#btnRefresh)",
+                );
+                buttons.forEach((btn) => (btn.disabled = false));
+            } catch (error) {
+                logOutput(
+                    "ERROR",
+                    `Error durante la inicialización: ${error.message}`,
+                );
+                stopTimer(`Error: ${error.message}`);
+            }
+        </script>
+
+        <!-- Scripts de interacción -->
+        <script>
+            const outputEl = document.getElementById("output");
+
+            function logOutput(label, text) {
+                console.log(label, text);
+                outputEl.textContent += `\n=== ${label} ===\n${text}\n`;
+            }
+
+            // Deshabilitar botones inicialmente
+            window.addEventListener("DOMContentLoaded", () => {
+                const buttons = document.querySelectorAll(
+                    "button:not(#btnRefresh)",
+                );
+                buttons.forEach((btn) => (btn.disabled = true));
+            });
+
+            // Botón de refrescar
+            document.getElementById("btnRefresh").onclick = () => {
+                location.reload();
             };
+
+            document.getElementById("btnInline").onclick = async () => {
+                const start = performance.now();
+                try {
+                    const result = await runPHP.inline(
+                        '<?php echo "Hola desde Inline PHP - " . date("Y-m-d H:i:s"); ?>',
+                    );
+                    const time = Math.round(performance.now() - start);
+                    logOutput(`Inline PHP (${time}ms)`, result);
+                } catch (error) {
+                    logOutput("ERROR Inline", error.message);
+                }
+            };
+
+            document.getElementById("btnGet1").onclick = async () => {
+                const start = performance.now();
+                try {
+                    const result = await runPHP.request({
+                        method: "GET",
+                        query: "/www/php/script_1.php",
+                        payload: "",
+                        headers: "",
+                    });
+                    const time = Math.round(performance.now() - start);
+                    logOutput(`GET /script_1.php (${time}ms)`, result);
+                } catch (error) {
+                    logOutput("ERROR GET1", error.message);
+                }
+            };
+
             document.getElementById("btnGet2").onclick = async () => {
-                const result = await runPHP.request({
-                    method: "GET",
-                    query: "/www/php/server_info.php",
-                    payload: "",
-                    headers: "",
-                });
-                logOutput("GET /server_info.php", result);
+                const start = performance.now();
+                try {
+                    const result = await runPHP.request({
+                        method: "GET",
+                        query: "/www/php/server_info.php",
+                        payload: "",
+                        headers: "",
+                    });
+                    const time = Math.round(performance.now() - start);
+                    logOutput(`GET /server_info.php (${time}ms)`, result);
+                } catch (error) {
+                    logOutput("ERROR GET2", error.message);
+                }
             };
+
             document.getElementById("btnPost").onclick = async () => {
-                const result = await runPHP.request({
-                    method: "POST",
-                    query: "/www/php/process.php",
-                    payload: "x=42&y=99",
-                    headers: "Content-Type: application/x-www-form-urlencoded",
-                });
-                logOutput("POST /process.php", result);
+                const start = performance.now();
+                try {
+                    const result = await runPHP.request({
+                        method: "POST",
+                        query: "/www/php/process.php",
+                        payload: "x=42&y=99",
+                        headers:
+                            "Content-Type: application/x-www-form-urlencoded",
+                    });
+                    const time = Math.round(performance.now() - start);
+                    logOutput(`POST /process.php (${time}ms)`, result);
+                } catch (error) {
+                    logOutput("ERROR POST", error.message);
+                }
             };
         </script>
     </body>
