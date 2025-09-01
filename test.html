@@ -5,85 +5,74 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>PHP WASM LOCAL API Tests</title>
         <style>
-            /* Variables de color para modo claro (sigue la estructura, pero se prioriza el oscuro) */
             :root {
-                --background: hsl(210, 20%, 98%); /* Gris muy claro */
-                --foreground: hsl(210, 10%, 20%); /* Gris oscuro */
-                --card: hsl(0, 0%, 100%); /* Blanco puro para tarjetas */
+                --background: hsl(210, 20%, 98%);
+                --foreground: hsl(210, 10%, 20%);
+                --card: hsl(0, 0%, 100%);
                 --card-foreground: hsl(210, 10%, 20%);
-                --primary: hsl(210, 70%, 45%); /* Azul primario */
+                --primary: hsl(210, 70%, 45%);
                 --primary-foreground: hsl(0, 0%, 100%);
-                --secondary: hsl(210, 20%, 92%); /* Gris claro para botones */
+                --secondary: hsl(210, 20%, 92%);
                 --secondary-foreground: hsl(210, 10%, 20%);
                 --muted: hsl(
                     210,
                     20%,
                     92%
-                ); /* Gris claro para fondos sutiles */
+                );
                 --muted-foreground: hsl(
                     210,
                     10%,
                     45%
-                ); /* Gris medio para texto secundario */
-                --border: hsl(210, 15%, 85%); /* Borde gris suave */
+                );
+                --border: hsl(210, 15%, 85%);
                 --input: hsl(210, 15%, 85%);
                 --ring: hsl(210, 70%, 45%);
-                --destructive: hsl(0, 80%, 55%); /* Rojo */
+                --destructive: hsl(0, 80%, 55%);
                 --destructive-foreground: hsl(0, 0%, 100%);
                 --radius: 12px;
                 --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             }
-
-            /* Variables de color para modo oscuro (Android Dark Theme Style) */
             @media (prefers-color-scheme: dark) {
                 :root {
                     --background: hsl(
                         220,
                         15%,
                         8%
-                    ); /* Fondo muy oscuro, casi negro azulado */
                     --foreground: hsl(
                         210,
                         20%,
                         90%
-                    ); /* Texto principal, gris claro */
                     --card: hsl(
                         220,
                         15%,
                         12%
-                    ); /* Tarjetas, un poco más claras que el fondo */
                     --card-foreground: hsl(210, 20%, 90%);
                     --primary: hsl(
                         210,
                         70%,
                         65%
-                    ); /* Azul brillante, pero no saturado */
                     --primary-foreground: hsl(220, 15%, 8%);
-                    --secondary: hsl(220, 15%, 20%); /* Botones, gris oscuro */
+                    --secondary: hsl(220, 15%, 20%);
                     --secondary-foreground: hsl(210, 20%, 90%);
-                    --muted: hsl(220, 15%, 20%); /* Fondos sutiles */
+                    --muted: hsl(220, 15%, 20%);
                     --muted-foreground: hsl(
                         210,
                         10%,
                         70%
-                    ); /* Texto secundario, gris medio */
-                    --border: hsl(220, 15%, 25%); /* Bordes */
+                    );
+                    --border: hsl(220, 15%, 25%);
                     --input: hsl(220, 15%, 25%);
                     --ring: hsl(210, 70%, 65%);
                     --destructive: hsl(0, 80%, 65%);
                     --destructive-foreground: hsl(220, 15%, 8%);
-                    --shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* Sombras más visibles en oscuro */
+                    --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
                 }
             }
-            /* --- */
-
-            /* Estilos globales y reseteo */
             *,
             *::before,
             *::after {
                 box-sizing: border-box;
             }
-
             body {
                 margin: 0;
                 font-family:
@@ -104,165 +93,138 @@
                 justify-content: center;
                 align-items: center;
                 -webkit-font-smoothing: antialiased;
-                padding: 1.5rem 1rem; /* Más padding para mobile */
+                padding: 1.5rem 1rem;
                 transition:
                     background-color 0.3s,
                     color 0.3s;
-                line-height: 1.5; /* Mejor legibilidad */
+                line-height: 1.5;
             }
 
             .container {
                 width: 100%;
-                max-width: 640px; /* Un poco más ancho para el contenido */
+                max-width: 640px;
                 margin: 0 auto;
                 display: flex;
                 flex-direction: column;
-                gap: 1.75rem; /* Más espacio entre las tarjetas */
+                gap: 1.75rem;
             }
-
-            /* Estilos de la tarjeta (Card) */
             .card {
                 background-color: var(--card);
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
-                padding: 2.5rem 1.75rem; /* Más padding para un look más "premium" */
+                padding: 2.5rem 1.75rem;
                 box-shadow: var(--shadow);
                 transition:
                     box-shadow 0.3s,
                     background-color 0.3s,
                     border-color 0.3s;
             }
-
-            /* --- */
-
-            /* Encabezados y títulos */
             h1,
             h3 {
                 margin: 0;
                 font-weight: 600;
                 line-height: 1.2;
             }
-
             h1 {
-                font-size: 2rem; /* Tamaño de fuente más grande */
+                font-size: 2rem;
                 text-align: center;
-                margin-bottom: 2rem; /* Más espacio debajo del título */
+                margin-bottom: 2rem;
                 color: var(--primary);
-                letter-spacing: -0.04em; /* Letter spacing más ajustado */
+                letter-spacing: -0.04em;
             }
-
             h3 {
-                font-size: 1.35rem; /* Tamaño de fuente del subtítulo ajustado */
+                font-size: 1.35rem;
                 font-weight: 500;
-                margin-bottom: 1.25rem; /* Más espacio debajo del subtítulo */
+                margin-bottom: 1.25rem;
                 color: var(--foreground);
             }
-            /* --- */
-
-            /* Temporizador */
             .timer {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                padding: 2rem 1rem; /* Más padding */
-                margin-bottom: 2rem; /* Más espacio debajo del timer */
+                padding: 2rem 1rem;
+                margin-bottom: 2rem;
                 border-radius: var(--radius);
                 background-color: var(--muted);
                 width: 100%;
                 text-align: center;
             }
-
             .timer-value {
-                font-size: 2.8rem; /* Tamaño de fuente más grande */
+                font-size: 2.8rem;
                 font-weight: 700;
                 color: var(--primary);
                 letter-spacing: -1.5px;
             }
-
             .timer-status {
-                font-size: 1rem; /* Tamaño de fuente ajustado */
-                margin-top: 0.75rem; /* Más espacio */
+                font-size: 1rem;
+                margin-top: 0.75rem;
                 color: var(--muted-foreground);
             }
-            /* --- */
-
-            /* Botones */
             .buttons {
                 display: flex;
                 flex-direction: column;
-                gap: 1.25rem; /* Más espacio entre los botones */
+                gap: 1.25rem;
             }
-
             button {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 1rem; /* Tamaño de fuente un poco más grande */
+                font-size: 1rem;
                 font-weight: 500;
-                border-radius: 9999px; /* Botones pill */
-                padding: 0 1.75rem; /* Más padding horizontal */
-                height: 3.25rem; /* Altura del botón ajustada */
+                border-radius: 9999px;
+                padding: 0 1.75rem;
+                height: 3.25rem;
                 cursor: pointer;
                 border: none;
                 background-color: var(--secondary);
                 color: var(--secondary-foreground);
                 outline: none;
                 border-radius: 9999px;
-                outline: none; /* Elimina la línea azul/cuadrada */
-                -webkit-tap-highlight-color: transparent; /* Elimina highlight en Android/iOS */
+                outline: none;
+                -webkit-tap-highlight-color: transparent;
             }
-
             button:hover {
                 background-color: var(
                     --primary
-                ); /* El hover ahora es el color primario */
+                );
                 color: var(--primary-foreground);
                 border-radius: 9999px;
             }
-
             button:active {
                 transform: translateY(0);
                 border-radius: 9999px;
                 background-color: var(
                     --primary
-                ); /* Asegura que se mantiene el color primario */
+                );
                 color: var(--primary-foreground);
             }
-
             button:focus-visible {
                 outline: 2px solid var(--primary);
                 outline-offset: 2px;
                 border-radius: 9999px;
             }
-
             button svg {
-                margin-right: 0.85rem; /* Más espacio para el ícono */
-                width: 1.35rem; /* Iconos un poco más grandes */
+                margin-right: 0.85rem;
+                width: 1.35rem;
                 height: 1.35rem;
                 stroke-width: 2;
-                opacity: 0.9; /* Opacidad sutil */
+                opacity: 0.9;
             }
-            /* --- */
-
-            /* Área de salida (Output) */
             pre#output {
                 font-family:
                     "Roboto Mono", "Fira Mono", "Menlo", "Consolas", monospace;
-                font-size: 0.95rem; /* Tamaño de fuente ligeramente más grande */
+                font-size: 0.95rem;
                 overflow: auto;
-                max-height: 28rem; /* Altura máxima un poco más grande */
+                max-height: 28rem;
                 background-color: var(--muted);
                 color: var(--muted-foreground);
-                padding: 1.5rem; /* Más padding */
+                padding: 1.5rem;
                 border-radius: var(--radius);
                 white-space: pre-wrap;
                 word-wrap: break-word;
                 line-height: 1.6;
             }
-            /* --- */
-
-            /* Media Queries para escritorio */
             @media (min-width: 768px) {
                 body {
                     padding: 3rem;
@@ -271,7 +233,7 @@
                     gap: 2.5rem;
                 }
                 .card {
-                    padding: 3.5rem 2.5rem; /* Más padding para escritorio */
+                    padding: 3.5rem 2.5rem;
                 }
                 h1 {
                     font-size: 2.8rem;
@@ -310,7 +272,6 @@
                         Inicializando...
                     </div>
                 </div>
-
                 <div class="buttons">
                     <button id="btnRefresh">
                         <svg
@@ -333,7 +294,6 @@
                         </svg>
                         Refrescar Página
                     </button>
-
                     <button id="btnInline">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -349,7 +309,6 @@
                         </svg>
                         Run Inline PHP
                     </button>
-
                     <button id="btnGet1">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -368,7 +327,6 @@
                         </svg>
                         Run GET /script_1.php
                     </button>
-
                     <button id="btnGet2">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -385,7 +343,6 @@
                         </svg>
                         Run GET /server_info.php
                     </button>
-
                     <button id="btnPost">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -404,7 +361,6 @@
                     </button>
                 </div>
             </div>
-
             <div class="card">
                 <h3>Output</h3>
                 <pre id="output">Inicializando PHP Runtime...</pre>
@@ -413,17 +369,14 @@
         <script>
             window.pageStartTime = performance.now();
             window.timerInterval = null;
-
             // Función para actualizar el timer
             function updateTimer() {
                 const elapsed = performance.now() - window.pageStartTime;
                 document.getElementById("timerValue").textContent =
                     `${Math.round(elapsed)} ms`;
             }
-
             // Iniciar el timer
             window.timerInterval = setInterval(updateTimer, 50);
-
             // Función para finalizar el timer
             function stopTimer(message) {
                 clearInterval(window.timerInterval);
@@ -431,8 +384,8 @@
             }
         </script>
 
+        // Librería
         <script src="php-runtime.js" type="module"></script>
-
         <script type="module">
             const outputEl = document.getElementById("output");
             function logOutput(label, text) {
