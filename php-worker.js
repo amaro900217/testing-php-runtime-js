@@ -159,11 +159,14 @@ class PhpWorker {
     );
     phpParts.push(this.buildHeaderVariables(headers));
     phpParts.push(this.buildConfigVariables(config));
-    if (method === "GET" && query) {
+    if (method === "GET") {
       phpParts.push(this.buildGetVariables(query));
-    }
-    if (method === "POST" && payload) {
+    } else if (method === "POST") {
       phpParts.push(this.buildPostVariables(payload));
+    } else {
+      phpParts.push(
+        `trigger_error("Unsupported HTTP method: ${method}", E_USER_ERROR);`,
+      );
     }
     return phpParts.join("");
   }

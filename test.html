@@ -14,16 +14,8 @@
                 --primary-foreground: hsl(0, 0%, 100%);
                 --secondary: hsl(210, 20%, 92%);
                 --secondary-foreground: hsl(210, 10%, 20%);
-                --muted: hsl(
-                    210,
-                    20%,
-                    92%
-                );
-                --muted-foreground: hsl(
-                    210,
-                    10%,
-                    45%
-                );
+                --muted: hsl(210, 20%, 92%);
+                --muted-foreground: hsl(210, 10%, 45%);
                 --border: hsl(210, 15%, 85%);
                 --input: hsl(210, 15%, 85%);
                 --ring: hsl(210, 70%, 45%);
@@ -34,32 +26,16 @@
             }
             @media (prefers-color-scheme: dark) {
                 :root {
-                    --background: hsl(
-                        220,
-                        15%,
-                        8%
-                    --foreground: hsl(
-                        210,
-                        20%,
-                        90%
-                    --card: hsl(
-                        220,
-                        15%,
-                        12%
+                    --background: hsl(220, 15%, 8%);
+                    --foreground: hsl(210, 20%, 90%);
+                    --card: hsl(220, 15%, 12%);
                     --card-foreground: hsl(210, 20%, 90%);
-                    --primary: hsl(
-                        210,
-                        70%,
-                        65%
+                    --primary: hsl(210, 70%, 65%);
                     --primary-foreground: hsl(220, 15%, 8%);
                     --secondary: hsl(220, 15%, 20%);
                     --secondary-foreground: hsl(210, 20%, 90%);
                     --muted: hsl(220, 15%, 20%);
-                    --muted-foreground: hsl(
-                        210,
-                        10%,
-                        70%
-                    );
+                    --muted-foreground: hsl(210, 10%, 70%);
                     --border: hsl(220, 15%, 25%);
                     --input: hsl(220, 15%, 25%);
                     --ring: hsl(210, 70%, 65%);
@@ -185,18 +161,14 @@
                 -webkit-tap-highlight-color: transparent;
             }
             button:hover {
-                background-color: var(
-                    --primary
-                );
+                background-color: var(--primary);
                 color: var(--primary-foreground);
                 border-radius: 9999px;
             }
             button:active {
                 transform: translateY(0);
                 border-radius: 9999px;
-                background-color: var(
-                    --primary
-                );
+                background-color: var(--primary);
                 color: var(--primary-foreground);
             }
             button:focus-visible {
@@ -384,7 +356,7 @@
             }
         </script>
 
-        // Librería
+        <!-- Librería -->
         <script src="php-runtime.js" type="module"></script>
         <script type="module">
             const outputEl = document.getElementById("output");
@@ -425,7 +397,7 @@
                     payload: "",
                     headers: "",
                 });
-                logOutput("AUTO GET /script_1.0.php", autoResult);
+                logOutput("AUTO GET /script_1.php", autoResult);
                 // Finalizar timer
                 const totalTime = Math.round(
                     performance.now() - window.pageStartTime,

@@ -66,6 +66,47 @@ Your PHP application files should be placed inside a zip archive located at `ass
 - **Full HTTP Environment Simulation:** Simulates `$_SERVER`, `$_GET`, `$_POST`, and other PHP superglobals.
 - **Securely Sandboxed:** The PHP environment is completely isolated from the host system.
 
+## Workflow
+
+```
+[Main Thread: runPHP]
+       │
+       ▼
+[Primary Worker: Install WASM + PHP Project]
+       │
+       ▼
+[Worker Pool: Load WASM, Ready for Requests]
+       │
+       ├───────────────► [runPHP.inline(code)]
+       │                      │
+       │                      ▼
+       │              [Assign Inline Code to Worker]
+       │                      │
+       │                      ▼
+       │              [Worker Execution]
+       │                      │
+       │                      ├─ Run PHP Code in WASM
+       │                      └─ Capture Output
+       │                      │
+       │                      ▼
+       │              [Return Result to Main Thread]
+       ▼
+[runPHP.request({method, query, payload, headers})]
+       │
+       ▼
+[Request Queue → Assign to Available Worker]
+       │
+       ▼
+[Worker Execution]
+       │
+       ├─ Build PHP Environment (Server + GET/POST + Headers)
+       ├─ Run PHP Code in WASM
+       └─ Capture Output
+       │
+       ▼
+[Return Result to Main Thread]
+```
+
 ## Special Thanks
 
 This library is built on top of the amazing **php-wasm** project. A special thanks to the creator and maintainers of this essential building block.
