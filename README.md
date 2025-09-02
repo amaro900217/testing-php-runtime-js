@@ -112,3 +112,9 @@ Your PHP application files should be placed inside a zip archive located at `ass
 This library is built on top of the amazing **php-wasm** project. A special thanks to the creator and maintainers of this essential building block.
 
 - [php-wasm by seanmorris](https://php-wasm.seanmorr.is/)
+
+## TO-DO
+
+- Consider warmups (for workers / for PHP)...
+- Find performance bottlenecks in workers init, pool, etc...
+- Cut off some workflow steps ? (less workload, faster cold startup)...
