@@ -77,7 +77,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
        ▼
 [Worker Pool: Load WASM, Ready for Requests] ◄─────────────────┐
        │                                                       │
-       ├───────────────► [runPHP.inline(code)]                 │
+       ├────────────► [runPHP.inline(code)]                    │
        │                      │                                │
        │                      ▼                                │
        │              [Assign Inline Code to Worker]           │
