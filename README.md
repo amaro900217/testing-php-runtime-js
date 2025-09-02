@@ -35,7 +35,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
 <script>
   const result = await runPHP.request({
       method: "GET", // POST
-      query: "/www/api/endpoint.php?user=test",
+      query: "/www/index.php?user=test", // "/www/api/endpoint"
       payload: "otheruser=theuser&value=123", // ""
       headers: "Content-Type:application/x-www-form-urlencoded;" // ""
   });
