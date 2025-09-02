@@ -75,36 +75,36 @@ Your PHP application files should be placed inside a zip archive located at `ass
 [Primary Worker: Install WASM + PHP Project]
        │
        ▼
-[Worker Pool: Load WASM, Ready for Requests]
-       │
-       ├───────────────► [runPHP.inline(code)]
-       │                      │
-       │                      ▼
-       │              [Assign Inline Code to Worker]
-       │                      │
-       │                      ▼
-       │              [Worker Execution]
-       │                      │
-       │                      ├─ Run PHP Code in WASM
-       │                      └─ Capture Output
-       │                      │
-       │                      ▼
-       │              [Return Result to Main Thread]
-       ▼
-[runPHP.request({method, query, payload, headers})]
-       │
-       ▼
-[Request Queue → Assign to Available Worker]
-       │
-       ▼
-[Worker Execution]
-       │
-       ├─ Build PHP Environment (Server + GET/POST + Headers)
-       ├─ Run PHP Code in WASM
-       └─ Capture Output
-       │
-       ▼
-[Return Result to Main Thread]
+[Worker Pool: Load WASM, Ready for Requests] ◄─────────────────┐
+       │                                                       │
+       ├───────────────► [runPHP.inline(code)]                 │
+       │                      │                                │
+       │                      ▼                                │
+       │              [Assign Inline Code to Worker]           │
+       │                      │                                │
+       │                      ▼                                │
+       │              [Worker Execution]                       │
+       │                      │                                │
+       │                      ├─ Run PHP Code in WASM          │
+       │                      └─ Capture Output                │
+       │                      │                                │
+       │                      ▼                                │
+       │              *[Return Result to Main Thread]*         │
+       ▼                                                       │
+[runPHP.request({method, query, payload, headers})]            │
+       │                                                       │
+       ▼                                                       │
+[Request Queue → Assign to Available Worker]                   │
+       │                                                       │
+       ▼                                                       │
+[Worker Execution]                                             │
+       │                                                       │
+       ├─ Build PHP Environment (Server + GET/POST + Headers)  │
+       ├─ Run PHP Code in WASM                                 │
+       └─ Capture Output                                       │
+       │                                                       │
+       ▼                                                       │
+*[Return Result to Main Thread]* ──────────────────────────────┘
 ```
 
 ## Special Thanks
