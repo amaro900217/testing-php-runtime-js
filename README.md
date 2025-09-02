@@ -89,7 +89,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
        │                      └─ Capture Output                │
        │                      │                                │
        │                      ▼                                │
-       │              *[Return Result to Main Thread]*         │
+       │              *[Return Result to Main Thread]* ───────►│
        ▼                                                       │
 [runPHP.request({method, query, payload, headers})]            │
        │                                                       │
