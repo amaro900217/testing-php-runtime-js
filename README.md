@@ -69,7 +69,7 @@ Your PHP application files should be placed inside a zip archive located at `ass
 ## Workflow
 
 ```
-[Main Thread: runPHP]
+[Main Thread: Load Library and Setup Optional Config]
        │
        ▼
 [Primary Worker: Install WASM + PHP Project]
