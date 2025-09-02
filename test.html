@@ -376,7 +376,7 @@
                     NUM_WORKERS: 1,
                     TIMEOUT_WORKER: 15000,
                     DOCUMENT_ROOT: "/www",
-                    ENTRY_POINT: "",
+                    ENTRY_POINT: "/www/php/public/index.php", // ""
                     SERVER_ADDR: "127.0.0.1",
                     SERVER_NAME: "browser-localhost",
                     SERVER_SOFTWARE: "wasm-server-0.0.8",
@@ -393,11 +393,11 @@
                 // Ejecutar petición GET automática al cargar
                 const autoResult = await runPHP.request({
                     method: "GET",
-                    query: "/www/php/script_1.php",
+                    query: "/api/posts", // "/www/php/script_1.php",
                     payload: "",
                     headers: "",
                 });
-                logOutput("AUTO GET /script_1.php", autoResult);
+                logOutput("AUTO GET LARAVEL /api/posts", autoResult);
                 // Finalizar timer
                 const totalTime = Math.round(
                     performance.now() - window.pageStartTime,

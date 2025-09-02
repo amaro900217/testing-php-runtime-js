@@ -75,16 +75,17 @@ class PhpWorker {
     const phpBin = await phpWeb.binary;
     let alreadyInstalled = false;
     try {
-      phpBin.FS.stat("/www/INSTALLED.txt");
+      await new Promise((resolve, reject) => {
+        phpBin.FS.syncfs(true, (err) => (err ? reject(err) : resolve()));
+      });
+      phpBin.FS.stat("/www/php/INSTALLED.txt");
       alreadyInstalled = true;
     } catch {}
+
     if (alreadyInstalled) {
       this.log(
         "✅ [Worker] PHP project already installed, skipping ZIP installation",
       );
-      await new Promise((resolve, reject) => {
-        phpBin.FS.syncfs(true, (err) => (err ? reject(err) : resolve()));
-      });
       phpWeb = null;
       return;
     }
@@ -99,27 +100,35 @@ class PhpWorker {
       unzip(zipData, (err, files) => (err ? reject(err) : resolve(files)));
     });
     this.log("📝 [Worker] Writing PHP files to virtual filesystem...");
-    for (const relativePath in unzippedFiles) {
-      const content = unzippedFiles[relativePath];
-      const fullPath = `/www/${relativePath}`;
-      const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
-      try {
-        phpBin.FS.mkdirTree(parentDir);
-      } catch {}
-      if (content.length === 0 && relativePath.endsWith("/")) {
-        try {
-          phpBin.FS.mkdir(fullPath);
-        } catch {}
-      } else {
-        const data =
-          content instanceof Uint8Array ? content : new Uint8Array(content);
-        phpBin.FS.writeFile(fullPath, data);
-      }
-    }
-    phpBin.FS.writeFile("/www/INSTALLED.txt", "installed");
+    const writePromises = Object.entries(unzippedFiles).map(
+      ([relativePath, content]) => {
+        return new Promise((resolve) => {
+          const fullPath = `/www/${relativePath}`;
+          const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+          try {
+            phpBin.FS.mkdirTree(parentDir);
+          } catch {} // ignorar si ya existe
+
+          if (content.length === 0 && relativePath.endsWith("/")) {
+            try {
+              phpBin.FS.mkdir(fullPath);
+            } catch {}
+          } else {
+            const data =
+              content instanceof Uint8Array ? content : new Uint8Array(content);
+            phpBin.FS.writeFile(fullPath, data);
+          }
+          resolve();
+        });
+      },
+    );
+    await Promise.all(writePromises);
+
+    // 💾 Sincronizar FS virtual a IndexedDB
     await new Promise((resolve, reject) => {
       phpBin.FS.syncfs(false, (err) => (err ? reject(err) : resolve()));
     });
+
     this.log("✅ [Worker] PHP project installed and synced");
     phpWeb = null;
   }
@@ -143,24 +152,60 @@ class PhpWorker {
       payload,
       headersStr,
     });
+
     const phpParts = [];
     const headers = this.parseHeaders(headersStr);
-    const [requestUri, queryString = ""] = (query ?? "").split("?");
+
+    // Separar path y query
+    let [requestUri, queryString = ""] = (query ?? "").split("?");
+
+    // Determinar si usamos front controller
+    const entryPoint = config.ENTRY_POINT || null;
+    let scriptFilename, scriptName, phpSelf, pathInfo;
+
+    if (entryPoint) {
+      // Framework / front controller
+      scriptFilename = entryPoint; // ruta absoluta en VFS
+      const docRoot = config.DOCUMENT_ROOT || "/www";
+      scriptName = "/" + entryPoint.replace(new RegExp(`^${docRoot}/?`), "");
+      phpSelf = scriptName;
+      pathInfo = requestUri; // REQUEST_URI completo se pasa como PATH_INFO
+    } else {
+      // Script simple
+      scriptFilename = requestUri; // ruta absoluta en VFS
+      const docRoot = config.DOCUMENT_ROOT || "/www";
+      scriptName = "/" + requestUri.replace(new RegExp(`^${docRoot}/?`), "");
+      phpSelf = scriptName;
+      pathInfo = null;
+    }
+
     const contentType =
       headers["Content-Type"] || "application/x-www-form-urlencoded";
-    phpParts.push(
-      this.buildServerVariables(
-        method,
-        requestUri,
-        queryString,
-        contentType,
-        payload,
-      ),
-    );
+
+    // Variables base del servidor
+    phpParts.push(`
+  $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+  $_SERVER['REQUEST_TIME'] = '${Math.floor(Date.now() / 1000)}';
+  $_SERVER['CONTENT_TYPE'] = '${contentType}';
+  $_SERVER['CONTENT_LENGTH'] = '${(payload ?? "").length}';
+  $_SERVER['REQUEST_METHOD'] = '${method}';
+  $_SERVER['REQUEST_URI'] = '${requestUri}';
+  $_SERVER['QUERY_STRING'] = '${queryString}';
+  $_SERVER['SCRIPT_FILENAME'] = '${scriptFilename}';
+  $_SERVER['SCRIPT_NAME'] = '${scriptName}';
+  $_SERVER['PHP_SELF'] = '${phpSelf}';
+  ${pathInfo ? `$_SERVER['PATH_INFO'] = '${pathInfo}';` : ""}
+  `);
+
+    // Headers
     phpParts.push(this.buildHeaderVariables(headers));
+
+    // Config adicionales
     phpParts.push(this.buildConfigVariables(config));
+
+    // GET / POST
     if (method === "GET") {
-      phpParts.push(this.buildGetVariables(query));
+      phpParts.push(this.buildGetVariables(queryString));
     } else if (method === "POST") {
       phpParts.push(this.buildPostVariables(payload));
     } else {
@@ -168,6 +213,7 @@ class PhpWorker {
         `trigger_error("Unsupported HTTP method: ${method}", E_USER_ERROR);`,
       );
     }
+
     return phpParts.join("");
   }
 
@@ -182,26 +228,13 @@ class PhpWorker {
         start = i + 1;
         if (!part) continue;
         const colonIndex = part.indexOf(":");
-        if (colonIndex === -1) continue; // ignorar si no hay ":"
+        if (colonIndex === -1) continue;
         const key = part.slice(0, colonIndex).trim();
         const value = part.slice(colonIndex + 1).trim();
         headers[key] = value;
       }
     }
     return headers;
-  }
-
-  buildServerVariables(method, requestUri, queryString, contentType, payload) {
-    return `
-$_SERVER['REMOTE_ADDR'] = '127.0.0.1';
-$_SERVER['REQUEST_TIME'] = '${Math.floor(Date.now() / 1000)}';
-$_SERVER['CONTENT_TYPE'] = '${contentType}';
-$_SERVER['CONTENT_LENGTH'] = '${(payload ?? "").length}';
-$_SERVER['REQUEST_METHOD'] = '${method}';
-$_SERVER['REQUEST_URI'] = '${requestUri}';
-$_SERVER['QUERY_STRING'] = '${queryString}';
-$_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
-`;
   }
 
   buildHeaderVariables(headers) {
@@ -222,8 +255,7 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
       } else if (typeof val === "number") {
         phpParts.push(`$_SERVER['${key}'] = ${val};`);
       } else {
-        // Reemplazo de comillas simples
-        const strVal = String(val).replace(/'/g, "'\'");
+        const strVal = String(val).replace(/'/g, "'\\''");
         phpParts.push(`$_SERVER['${key}'] = '${strVal}';`);
       }
     }
@@ -236,8 +268,7 @@ $_SERVER['SCRIPT_FILENAME'] = '${requestUri}';
 
   buildGetVariables(query) {
     const phpParts = [];
-    const queryString = query.split("?")[1] || "";
-    const params = new URLSearchParams(queryString);
+    const params = new URLSearchParams(query);
     for (const [key, value] of params.entries()) {
       phpParts.push(`$_GET['${key}'] = '${this.escapePhp(value)}';\n`);
     }
