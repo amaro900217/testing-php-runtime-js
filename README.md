@@ -119,6 +119,7 @@ This library is built on top of the amazing **php-wasm** project. A special than
 ## TO-DO
 
 - Continue testing heavy frameworks, check again the env needed for them...
+- Explore shared workers and keepalive iframe...
 - PhpWeb is being instantiated differen times in worker ?? unify ??
 - Set static env vars in the PhpWeb instantiation / review it!
 - Consider warmups (for workers / for PHP / possible?? )
