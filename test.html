@@ -373,8 +373,8 @@
                 // Configurar PHP Runtime
                 await runPHP.init({
                     DEBUG: true,
-                    NUM_WORKERS: 1,
-                    TIMEOUT_WORKER: 15000,
+                    NUM_WORKERS: 2,
+                    TIMEOUT_WORKER: 60000,
                     DOCUMENT_ROOT: "/www",
                     ENTRY_POINT: "/www/php/public/index.php", // ""
                     SERVER_ADDR: "127.0.0.1",
