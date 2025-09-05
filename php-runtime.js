@@ -1,4 +1,4 @@
-// php-runtime.js 
+// php-runtime.js
 
 import { PhpWeb } from "./node_modules/php-wasm/PhpWeb.mjs";
 
@@ -68,11 +68,11 @@ class PhpRuntime {
 
   async init(config = {}) {
     this.config = { ...this.configDefaults, ...config };
-    const db = await this.getDb("/worker");
+    const db = await this.getDb("/setup");
     this.warmed = await new Promise((resolve) => {
       const tx = db.transaction("FILE_DATA", "readonly");
       const store = tx.objectStore("FILE_DATA");
-      const req = store.get("php-worker-snapshot");
+      const req = store.get("installed");
       req.onsuccess = () => resolve(req.result === true);
       req.onerror = () => resolve(false);
     });
@@ -118,11 +118,11 @@ class PhpRuntime {
     });
     this.warmWorker.onmessage = async (e) => {
       if (e.data.type === "workerReady") {
-        const db = await this.getDb("/worker");
+        const db = await this.getDb("/setup");
         await new Promise((resolve, reject) => {
           const tx = db.transaction("FILE_DATA", "readwrite");
           const store = tx.objectStore("FILE_DATA");
-          store.put(true, "php-worker-snapshot");
+          store.put(true, "installed");
           tx.oncomplete = () => resolve();
           tx.onerror = (e) => reject(e.target.error);
         });

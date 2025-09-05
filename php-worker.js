@@ -67,12 +67,11 @@ class PhpWorker {
   }
 
   async installPhpFiles(wasmBuffer) {
-    let phpWeb = new PhpWeb({
-      wasmBinary: wasmBuffer,
-      persist: { mountPath: "/www" },
-    });
-    await phpWeb.ready;
-    const phpBin = await phpWeb.binary;
+    if (!this.phpWeb) {
+      await this.loadPhpWasm(wasmBuffer);
+      await this.phpWeb.ready;
+    }
+    const phpBin = await this.phpWeb.binary;
     let alreadyInstalled = false;
     try {
       await new Promise((resolve, reject) => {
@@ -130,7 +129,6 @@ class PhpWorker {
     });
 
     this.log("✅ [Worker] PHP project installed and synced");
-    phpWeb = null;
   }
 
   async handleInstallation() {
@@ -262,15 +260,11 @@ class PhpWorker {
     return phpParts.join("");
   }
 
-  escapePhp(str) {
-    return typeof str === "string" ? str.replace(/'/g, "'\'") : str;
-  }
-
   buildGetVariables(query) {
     const phpParts = [];
     const params = new URLSearchParams(query);
     for (const [key, value] of params.entries()) {
-      phpParts.push(`$_GET['${key}'] = '${this.escapePhp(value)}';\n`);
+      phpParts.push(`$_GET['${key}'] = '${value}';\n`);
     }
     return phpParts.join("");
   }
@@ -279,7 +273,7 @@ class PhpWorker {
     const phpParts = [];
     const params = new URLSearchParams(payload);
     for (const [key, value] of params.entries()) {
-      phpParts.push(`$_POST['${key}'] = '${this.escapePhp(value)}';\n`);
+      phpParts.push(`$_POST['${key}'] = '${value}';\n`);
     }
     return phpParts.join("");
   }
@@ -305,10 +299,10 @@ class PhpWorker {
     };
   }
 
-  async loadWasm(wasmBin, config) {
+  async loadPhpWasm(wasmBin, config = {}) {
     if (this.phpWeb) return;
 
-    /*  
+    /*
     PhpWeb 0.0.8  –  PUBLIC API  (web / no-CGI)
     ----------------------------------------------------------
     LIFE-CYCLE
@@ -356,7 +350,7 @@ class PhpWorker {
       wasmBinary: wasmBin,
       persist: { mountPath: "/www" },
 
-      /* 
+      /*
         1  ini: `memory_limit = 512M …`,             // Fragmento de php.ini que se añade antes de arrancar PHP
         2  prefix: '/mi-app',                        // Raíz del VFS interno (NO tiene relación con CGI)
         3  persistent: true,                         // Mantiene el VFS en IndexedDB entre recargas
@@ -379,7 +373,7 @@ class PhpWorker {
        20 noExitRuntime: true,                      // Mantiene el runtime vivo tras cada `run()` (evita reinicialización)
        21 noInitialRun: true,                       // No ejecuta ningún script automáticamente al arrancar el runtime
        22 arguments: ['-f', '/tmp/demo.php']        // Argumentos CLI que recibirá PHP en `argv`
-      
+
        1  ini: `memory_limit = 512M …`,          // php.ini extra antes de arrancar PHP
        2  prefix: '/mi-app',                      // raíz del VFS interno
        3  persistent: true,                       // mantiene VFS en IndexedDB entre recargas
@@ -424,13 +418,14 @@ class PhpWorker {
       42  preinitializedWebGLContext: glCtx,       // contexto WebGL ya creado
       43  webglContextAttributes: {alpha:false}    // atributos para crear contexto GL interno
       */
-
     });
     await this.phpWeb.ready;
-    this.config = { ...config };
-    this.initialized = true;
-    this.log("✅ PhpWeb WASM loaded and ready");
-    self.postMessage({ type: "workerReady" });
+    if (config) {
+      this.config = { ...config };
+      this.initialized = true;
+      this.log("✅ PhpWeb WASM loaded and ready");
+      self.postMessage({ type: "workerReady" });
+    }
   }
 
   async runInline(id, code) {
@@ -482,7 +477,7 @@ class PhpWorker {
       return;
     }
     if (msg.type === "loadWasm") {
-      await this.loadWasm(msg.wasmBin, msg.cnfg);
+      await this.loadPhpWasm(msg.wasmBin, msg.cnfg);
       return;
     }
     if (!this.initialized) {
