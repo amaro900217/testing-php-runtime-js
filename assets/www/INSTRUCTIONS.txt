@@ -1,2 +1,0 @@
-php.zip     -> Laravel restful api (using entry point)
-php.zip.bak -> stand alone scripts (no entry point)

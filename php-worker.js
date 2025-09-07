@@ -40,6 +40,7 @@ class PhpWorker {
       req.onsuccess = () => resolve(req.result ?? null);
       req.onerror = () => resolve(null);
     });
+
     if (exists) {
       this.log("📥 [Worker] WASM loaded from IndexedDB.");
       this.wasmBuffer = exists;
@@ -66,69 +67,106 @@ class PhpWorker {
     return wasmBuffer;
   }
 
-  async installPhpFiles(wasmBuffer) {
+  // php-worker.js (solo la función installPhpFiles modificada)
+  async installPhpFiles(wasmBuffer, datUrl = "/assets/www/laravel.dat.gz") {
     if (!this.phpWeb) {
       await this.loadPhpWasm(wasmBuffer);
       await this.phpWeb.ready;
     }
+
     const phpBin = await this.phpWeb.binary;
     let alreadyInstalled = false;
     try {
       await new Promise((resolve, reject) => {
         phpBin.FS.syncfs(true, (err) => (err ? reject(err) : resolve()));
       });
-      phpBin.FS.stat("/www/php/INSTALLED.txt");
+      phpBin.FS.stat("/www/INSTALLED.txt");
       alreadyInstalled = true;
     } catch {}
 
     if (alreadyInstalled) {
       this.log(
-        "✅ [Worker] PHP project already installed, skipping ZIP installation",
+        "✅ [Worker] PHP project already installed, skipping installation",
       );
-      phpWeb = null;
       return;
     }
-    this.log("⬇️ [Worker] Downloading php.zip...");
-    const zipData = await fetch("/assets/www/php.zip").then(async (res) => {
-      if (!res.ok)
-        throw new Error(`❌ Failed to download php.zip: ${res.statusText}`);
-      return new Uint8Array(await res.arrayBuffer());
-    });
-    this.log("📦 [Worker] Unzipping PHP files...");
-    const unzippedFiles = await new Promise((resolve, reject) => {
-      unzip(zipData, (err, files) => (err ? reject(err) : resolve(files)));
-    });
-    this.log("📝 [Worker] Writing PHP files to virtual filesystem...");
-    const writePromises = Object.entries(unzippedFiles).map(
-      ([relativePath, content]) => {
-        return new Promise((resolve) => {
-          const fullPath = `/www/${relativePath}`;
-          const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
-          try {
-            phpBin.FS.mkdirTree(parentDir);
-          } catch {} // ignorar si ya existe
 
-          if (content.length === 0 && relativePath.endsWith("/")) {
-            try {
-              phpBin.FS.mkdir(fullPath);
-            } catch {}
-          } else {
-            const data =
-              content instanceof Uint8Array ? content : new Uint8Array(content);
-            phpBin.FS.writeFile(fullPath, data);
-          }
-          resolve();
-        });
-      },
+    this.log("⬇️ [Worker] Downloading project data from .dat.gz file...");
+    const response = await fetch(datUrl);
+    if (!response.ok) {
+      throw new Error(
+        `❌ Failed to download .dat.gz file: ${response.statusText}`,
+      );
+    }
+
+    // Obtener los datos comprimidos
+    const compressedData = new Uint8Array(await response.arrayBuffer());
+
+    // Descomprimir los datos
+    this.log("🗜️ Decompressing .dat.gz file...");
+    const datContent = gunzipSync(compressedData);
+
+    // Procesar el archivo .dat
+    const dataView = new DataView(datContent.buffer);
+    let offset = 0;
+
+    // Leer el número de archivos
+    const numFiles = dataView.getUint32(offset, true);
+    offset += 4;
+
+    for (let i = 0; i < numFiles; i++) {
+      // Leer la longitud del nombre del archivo
+      const nameLength = dataView.getUint16(offset, true);
+      offset += 2;
+
+      // Leer el nombre del archivo
+      const nameBytes = new Uint8Array(datContent.buffer, offset, nameLength);
+      const fileName = new TextDecoder().decode(nameBytes);
+      offset += nameLength;
+
+      // Leer la longitud del contenido
+      const contentLength = dataView.getUint32(offset, true);
+      offset += 4;
+
+      // Leer el contenido del archivo
+      const content = new Uint8Array(datContent.buffer, offset, contentLength);
+      offset += contentLength;
+
+      // Escribir el archivo en el sistema de archivos virtual
+      const fullPath = `/www/${fileName}`;
+      const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+
+      try {
+        phpBin.FS.mkdirTree(parentDir);
+      } catch (e) {
+        // Ignorar si el directorio ya existe
+      }
+
+      if (content.length === 0 && fileName.endsWith("/")) {
+        // Es un directorio
+        try {
+          phpBin.FS.mkdir(fullPath);
+        } catch (e) {
+          // Ignorar si el directorio ya existe
+        }
+      } else {
+        // Es un archivo
+        phpBin.FS.writeFile(fullPath, content);
+      }
+    }
+
+    // Crear archivo de marcador de instalación
+    phpBin.FS.writeFile(
+      "/www/INSTALLED.txt",
+      new TextEncoder().encode("installed"),
     );
-    await Promise.all(writePromises);
 
-    // 💾 Sincronizar FS virtual a IndexedDB
+    // Sincronizar con IndexedDB
     await new Promise((resolve, reject) => {
       phpBin.FS.syncfs(false, (err) => (err ? reject(err) : resolve()));
     });
 
-    this.log("✅ [Worker] PHP project installed and synced");
+    this.log("✅ [Worker] PHP project installed from .dat.gz file");
   }
 
   async handleInstallation() {
