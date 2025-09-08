@@ -266,6 +266,24 @@
                         </svg>
                         Refrescar Página
                     </button>
+                    <button id="btnGetPosts">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                            ></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                        Run GET /api/posts
+                    </button>
                     <button id="btnInline">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -373,7 +391,7 @@
                 // Configurar PHP Runtime
                 await runPHP.init({
                     DEBUG: true,
-                    NUM_WORKERS: 2,
+                    NUM_WORKERS: 1,
                     TIMEOUT_WORKER: 60000,
                     DOCUMENT_ROOT: "/www",
                     ENTRY_POINT: "/www/public/index.php", // ""
@@ -410,6 +428,28 @@
                 );
                 stopTimer(`Error: ${error.message}`);
             }
+        </script>
+        <script>
+            document.getElementById("btnGetPosts").onclick = async () => {
+                const start = performance.now();
+                try {
+                    const result = await runPHP.request({
+                        method: "GET",
+                        query: "/api/posts",
+                        payload: "",
+                        headers: "",
+                    });
+                    const time = Math.round(performance.now() - start);
+                    logOutput(`GET /api/posts (${time}ms)`, result);
+                    // Mostrar alert con tiempo y contenido
+                    alert(
+                        `GET /api/posts completado en ${time} ms\n\nRespuesta:\n${result}`,
+                    );
+                } catch (error) {
+                    logOutput("ERROR GET /api/posts", error.message);
+                    alert(`ERROR GET /api/posts:\n${error.message}`);
+                }
+            };
         </script>
 
         <script>
@@ -484,3 +524,4 @@
         </script>
     </body>
 </html>
+
