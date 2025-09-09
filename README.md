@@ -121,6 +121,7 @@ This library is built on top of the amazing **php-wasm** project. A special than
 - Use heavy frameworks for testing...
 - Rewrite the parameters of the http lifecycle.. check php-cgi-wasm, params, cookies, headers..
 - Only persist a php project folder, skip the rest if possible (anyways we have to keep them in memory so this wont work maybe ??)
+- Using workers already.. maybe do a prefetch of all and cache it? its gonna be in bg anyways..
 - Have a look at php-wasm-builder...
 - Rewrite using vite
 - Use .dat file to load php code (gzipped)
