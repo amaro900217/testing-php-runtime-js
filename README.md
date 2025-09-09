@@ -119,6 +119,7 @@ This library is built on top of the amazing **php-wasm** project. A special than
 ## TO-DO
 
 - Use heavy frameworks for testing...
+- Rewrite the parameters of the http lifecycle.. check php-cgi-wasm, params, cookies, headers..
 - Only persist a php project folder, skip the rest if possible (anyways we have to keep them in memory so this wont work maybe ??)
 - Have a look at php-wasm-builder...
 - Rewrite using vite
