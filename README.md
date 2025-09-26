@@ -1,3 +1,5 @@
+THIS IS THE OLD README ... (TODO: fix)
+
 # PHP WASM Runtime in the Browser
 
 Run PHP code directly in the browser using WebAssembly (php-wasm). This library provides support for inline code execution and simulates a complete HTTP request cycle, all while being optimized for a non-blocking startup after the first initialization.
