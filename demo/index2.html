@@ -165,6 +165,23 @@
         }
         .result-card.success { border-left-color: var(--success); }
         .result-card.error { border-left-color: var(--danger); }
+        .result-card h3 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.1rem;
+            margin: 0 0 0.75rem 0;
+        }
+        .result-card .time-badge {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            background-color: var(--muted-fg);
+            color: var(--card-bg);
+        }
+        .result-card.success .time-badge { background-color: var(--success); }
+        .result-card.error .time-badge { background-color: var(--danger); }
         .result-card pre {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -204,7 +221,7 @@
             <h2>Configuración de la Prueba</h2>
             <div class="form-group">
                 <label class="form-label" for="concurrency-input">Solicitudes Concurrentes</label>
-                <input class="form-input" type="number" id="concurrency-input" value="10" min="1" max="100">
+                <input class="form-input" type="number" id="concurrency-input" value="4" min="1" max="100">
             </div>
             <button class="btn btn-primary" id="start-test-btn" disabled>Iniciar Prueba</button>
         </div>
@@ -248,7 +265,7 @@
                 console.log('Initializing PHP runtime...');
                 await runPHP.init({
                     DEBUG: false,
-                    NUM_WORKERS: 4, // Valor fijo de workers
+                    NUM_WORKERS: 4,
                     TIMEOUT_WORKER: 60000,
                     DOCUMENT_ROOT: "/www",
                     ENTRY_POINT: "/www/public/index.php",
@@ -270,7 +287,6 @@
             }
         }
         
-        // Initialize on page load
         initializePHP();
 
         startTestBtn.addEventListener('click', async () => {
@@ -280,7 +296,6 @@
                 return;
             }
 
-            // Reset UI
             resultsContainer.innerHTML = '';
             summaryCard.style.display = 'block';
             startTestBtn.disabled = true;
@@ -289,20 +304,23 @@
             
             let completedRequests = 0;
 
-            const requestPromises = Array.from({ length: concurrency }, (_, i) => 
-                runPHP.request({
+            const requestPromises = Array.from({ length: concurrency }, (_, i) => {
+                const reqStartTime = performance.now();
+                return runPHP.request({
                     method: 'GET',
                     query: '/api/posts',
                 }).then(result => {
+                    const reqTime = performance.now() - reqStartTime;
                     completedRequests++;
                     progressBar.style.width = `${(completedRequests / concurrency) * 100}%`;
-                    return { status: 'success', result, index: i };
+                    return { status: 'success', result, index: i, time: reqTime };
                 }).catch(error => {
+                    const reqTime = performance.now() - reqStartTime;
                     completedRequests++;
                     progressBar.style.width = `${(completedRequests / concurrency) * 100}%`;
-                    return { status: 'error', error, index: i };
-                })
-            );
+                    return { status: 'error', error, index: i, time: reqTime };
+                });
+            });
 
             const startTime = performance.now();
             const results = await Promise.all(requestPromises);
@@ -311,12 +329,16 @@
             let successfulCount = 0;
             let failedCount = 0;
             
-            // Sort results to display them in order
             results.sort((a, b) => a.index - b.index).forEach(result => {
                 const card = document.createElement('div');
                 card.className = 'card result-card';
                 const title = document.createElement('h3');
+                const timeBadge = document.createElement('span');
+                timeBadge.className = 'time-badge';
+                timeBadge.textContent = `${Math.round(result.time)} ms`;
                 title.textContent = `Solicitud #${result.index + 1}`;
+                title.appendChild(timeBadge);
+                
                 const content = document.createElement('pre');
 
                 if (result.status === 'success') {
