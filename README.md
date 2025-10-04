@@ -1,4 +1,4 @@
-THIS IS THE OLD README ... (TODO: fix)
+-- OLD README (to be fixed) --
 
 # PHP WASM Runtime in the Browser
 
@@ -6,7 +6,7 @@ Run PHP code directly in the browser using WebAssembly (php-wasm). This library 
 
 ## Installation
 
-Your PHP application files should be placed inside a zip archive located at `assets/www/php.zip`. This library will automatically unzip, persist in browser and run the files upon requests.
+Your PHP application files should be placed inside a zip archive located at `assets/www/php-api.zip`. This library will automatically unzip, persist in browser and run the files upon requests.
 
 ```html
 <!-- Load the library -->
@@ -118,124 +118,146 @@ This library is built on top of the amazing **php-wasm** project. A special than
 
 - [php-wasm by seanmorris](https://php-wasm.seanmorr.is/)
 
-## TO-DO
+# 🧩 PhpWeb 0.0.8 — Development Notes
 
-- Use heavy frameworks for testing...
-- Rewrite the parameters of the http lifecycle.. check php-cgi-wasm, params, cookies, headers..
-- Only persist a php project folder, skip the rest if possible (anyways we have to keep them in memory so this wont work maybe ??)
-- Keep an eye on static env and dynamic env vars.. rewrite dynamic ones on every request, keep static ones static...
-- Still consider warmups ??
-- REMOVE NOT NECESSARY LOGS!!
-- Find performance bottlenecks in workers init, pool, etc...
-- Cut off some workflow steps ? (less workload, faster cold startup: capture otuput fn, simplify worker, etc..)...
+## ✅ TO-DO
 
-___________________ MORE TO CONSIDER??:
+### General Tasks
+- [ ] Use heavy frameworks for testing.
+- [ ] Rewrite HTTP lifecycle parameters — check `php-cgi-wasm` (params, cookies, headers…).
+- [ ] Persist **only** the PHP project folder (skip the rest if possible).
+  > ⚠️ Might not work, since VFS must remain in memory.
+- [ ] Keep an eye on **static vs dynamic env vars** — rewrite dynamic ones per request; keep statics fixed.
+- [ ] Still consider **runtime warmups**.
+- [ ] **Remove unnecessary logs.**
+- [ ] Identify **performance bottlenecks** (workers init, pool creation, etc.).
+- [ ] Cut off redundant workflow steps (to improve cold startup):
+  - Simplify output capture.
+  - Streamline worker initialization.
 
-PhpWeb 0.0.8  –  PUBLIC API  (web / no-CGI)
-    ----------------------------------------------------------
-    LIFE-CYCLE
-    ----------------------------------------------------------
-    new PhpWeb(opts?)                 // constructor
-    async run(code?, args?)           // exec string | file set in opts.arguments
-    async exec(file, args?)           // run a concrete VFS file
-    refresh()                         // reboot runtime (keeps VFS if persistent)
-    ----------------------------------------------------------
-    CONVENIENCE  (sync wrappers)
-    ----------------------------------------------------------
-    r(code) : string                  // one-liner run
-    x(file, args?) : string            // one-liner exec
-    ----------------------------------------------------------
-    FILE-SYSTEM  (all sync – Emscripten FS façade)
-    ----------------------------------------------------------
-    analyzePath(path) : FSNode
-    stat(path) : Stats
-    readFile(path, opts?) : string | Uint8Array
-    writeFile(path, data, opts?) : void
-    mkdir(path) : void
-    unlink(path) : void
-    rename(old, new) : void
-    readdir(path) : string[]
-    php.fs.*                          // raw FS object (open, close, read, etc.)
-    ----------------------------------------------------------
-    RUNTIME
-    ----------------------------------------------------------
-    async loadExtension(url)          // dlopen a .so at runtime
-    addSharedLib(name, url, ini?)     // register extra .so
-    ----------------------------------------------------------
-    STATIC
-    ----------------------------------------------------------
-    PhpWeb.phpVersion : string        // "8.3"
-    PhpWeb.module : EmscriptenModule  // low-level handle
-    ----------------------------------------------------------
-    NOTE:  startTransaction / commitTransaction / abortTransaction
-           do NOT exist in 0.0.8  (auto-transaction always ON).
+---
 
+## 💡 Additional Considerations
 
+### 🧠 Overview
+**PhpWeb 0.0.8** exposes a simple, high-level **Web API (non-CGI)** interface to execute PHP code directly in WebAssembly environments.
 
-        1  ini: `memory_limit = 512M …`,             // Fragmento de php.ini que se añade antes de arrancar PHP
-        2  prefix: '/mi-app',                        // Raíz del VFS interno (NO tiene relación con CGI)
-        3  persistent: true,                         // Mantiene el VFS en IndexedDB entre recargas
-        4  persist: true,                            // Alias redundante de `persistent` (demostrativo)
-        5  autoTransaction: false,                   // Desactiva la sincronización automática; tú llamas (await php.startTransaction() .commitTransaction())
-        6  extensions: ['intl','mbstring'],          // Extensiones que se cargan en cuanto se crea la instancia
-        7  sharedLibs: […],                          // Ficheros `.so` (o URLs) que se cargan junto con PHP
-        8  files: […],                               // Archivos adicionales que se descargan y copian al VFS antes de arrancar
-        9  wasmBinary: await fetch(…),               // Buffer propio del binario `.wasm` (útil sin red o para bundling)
-       10 locateFile: s => `…/${s}`,                // Callback que resuelve la URL final de cualquier asset (.wasm, .so, .data)
-       11 env: { MI_VARIABLE: … },                  // Variables de entorno disponibles vía `getenv()` dentro de PHP
-       12 preRun: [() => …],                        // Funciones JS que se ejecutan **antes** de inicializar PHP
-       13 postRun: [() => …],                       // Funciones JS que se ejecutan **después** de que PHP termine
-       14 print: txt => …,                          // Redirige la salida estándar de PHP (stdout)
-       15 printErr: txt => …,                       // Redirige la salida de errores de PHP (stderr)
-       16 onAbort: what => …,                       // Callback que se dispara si el runtime WASM aborta
-       17 initialMemory: 4096,                      // Memoria inicial en páginas WASM (4096 × 64 KiB = 256 MiB)
-       18 maximumMemory: 8192,                      // Memoria máxima que puede crecer el heap (8192 × 64 KiB = 512 MiB)
-       19 ALLOW_MEMORY_GROWTH: true,                // Permite que el heap crezca dinámicamente
-       20 noExitRuntime: true,                      // Mantiene el runtime vivo tras cada `run()` (evita reinicialización)
-       21 noInitialRun: true,                       // No ejecuta ningún script automáticamente al arrancar el runtime
-       22 arguments: ['-f', '/tmp/demo.php']        // Argumentos CLI que recibirá PHP en `argv`
-       1  ini: `memory_limit = 512M …`,          // php.ini extra antes de arrancar PHP
-       2  prefix: '/mi-app',                      // raíz del VFS interno
-       3  persistent: true,                       // mantiene VFS en IndexedDB entre recargas
-       4  persist: true, ??????                   // alias de persistent (ambos valen)
-       5  extensions: ['intl','mbstring'],        // extensiones a precargar
-       6  sharedLibs: […],                        // .so / urls a cargar al arrancar
-       7  wasmBinary: await fetch(…),             // buffer propio del .wasm (sin fetch)
-       8  locateFile: s => `/static/${s}`,        // resuelve URL de cualquier asset
-       9  env: { MI_VARIABLE: 'valor' },          // vars de entorno para getenv()
-      10  preRun: [() => …],                      // callbacks antes de iniciar runtime
-      11  postRun: [() => …],                     // callbacks después de terminar
-      12  print: txt => …,                        // stdout carácter a carácter
-      13  printErr: txt => …,                     // stderr carácter a carácter
-      14  onAbort: what => …,                     // se dispara si aborta el runtime
-      15  arguments: ['-f','cli.php'],            // argv que recibirá PHP
-      16  initialMemory: 4096,                    // páginas iniciales (256 MiB)
-      17  maximumMemory: 8192,                    // páginas máximas (512 MiB)
-      18  ALLOW_MEMORY_GROWTH: true,              // permite crecer el heap
-      19  noExitRuntime: true,                    // no finalizar runtime tras run()
-      20  noInitialRun: true,                     // no ejecutar main() al arrancar
-      21  stdin: () => prompt('STDIN:'),          // lee de JS cuando PHP pida STDIN
-      22  stdout: c => outEl.append(c),           // stdout por carácter (más fino que print)
-      23  stderr: c => errEl.append(c),           // stderr por carácter
-      24  quit: (status, toThrow) => …,           // sobrescribe función quit() de Emscripten
-      25  noFSInit: true,                         // no montar FS por defecto (tú haces FS.mount)
-      26  INITIAL_MEMORY: 256*1024*1024,          // bytes iniciales (alias de initialMemory*página)
-      27  MAXIMUM_MEMORY: 512*1024*1024,          // bytes máximos (alias)
-      28  STACK_SIZE: 8*1024*1024,                // tamaño de pila (por defecto 16 MiB)
-      29  ALLOW_TABLE_GROWTH: true,               // permite crecer tabla de funciones
-      30  ASSERTIONS: 1,                           // nivel de assertions Emscripten (0,1,2)
-      31  STACK_OVERFLOW_CHECK: 1,                 // chequeo de desbordamiento de pila
-      32  SAFE_HEAP: 1,                            // activa Safe-Heap (debug)
-      33  GL_DEBUG: true,                          // log de llamadas WebGL
-      34  GL_ASSERTIONS: true,                     // assertions en cada llamada GL
-      35  fetchSettings: {credentials:'include'},  // opciones por defecto para fetch()
-      36  instantiateWasm: (imports,okCb) => …,    // control total de instanciación WASM
-      37  monitorRunDependencies: (left)=> …,      // progreso mientras faltan assets
-      38  dynamicLibraries: ['a.so','b.so'],       // .so a cargar vía dlopen al arrancar
-      39  wasmMemory: new WebAssembly.Memory({…}), // Memory propia (sin crear nueva)
-      40  wasmTable: new WebAssembly.Table({…}),   // Table propia
-      41  wasmModule: compiledModule,              // Módulo WASM ya compilado
-      42  preinitializedWebGLContext: glCtx,       // contexto WebGL ya creado
-      43  webglContextAttributes: {alpha:false}    // atributos para crear contexto GL interno
-      
--------------------
+---
+
+## 🔄 Lifecycle API
+
+| Method | Description |
+|--------|--------------|
+| `new PhpWeb(opts?)` | Constructor |
+| `async run(code?, args?)` | Execute PHP string or file (from `opts.arguments`) |
+| `async exec(file, args?)` | Run a specific file in VFS |
+| `refresh()` | Reboot runtime (keeps VFS if persistent) |
+
+---
+
+## ⚙️ Convenience Wrappers (Sync)
+
+| Method | Description |
+|--------|--------------|
+| `r(code): string` | One-liner `run()` wrapper |
+| `x(file, args?): string` | One-liner `exec()` wrapper |
+
+---
+
+## 📁 File System (Sync — Emscripten FS Façade)
+
+| Method | Description |
+|--------|--------------|
+| `analyzePath(path)` → `FSNode` | Analyze path |
+| `stat(path)` → `Stats` | File stats |
+| `readFile(path, opts?)` → `string | Uint8Array` | Read file |
+| `writeFile(path, data, opts?)` | Write file |
+| `mkdir(path)` | Create directory |
+| `unlink(path)` | Delete file |
+| `rename(old, new)` | Rename file |
+| `readdir(path)` → `string[]` | Read directory |
+| `php.fs.*` | Raw FS access (open, close, read, etc.) |
+
+---
+
+## ⚙️ Runtime
+
+| Method | Description |
+|--------|--------------|
+| `async loadExtension(url)` | Dynamically load a `.so` shared library |
+| `addSharedLib(name, url, ini?)` | Register an additional shared library |
+
+---
+
+## 🧱 Static Properties
+
+| Property | Description |
+|-----------|--------------|
+| `PhpWeb.phpVersion: string` | e.g. `"8.3"` |
+| `PhpWeb.module: EmscriptenModule` | Low-level runtime handle |
+
+> **Note:**
+> `startTransaction()`, `commitTransaction()`, and `abortTransaction()`
+> **do not exist in v0.0.8** — automatic transaction mode is always ON.
+
+---
+
+## ⚙️ Constructor Options (`opts`)
+
+```js
+{
+  ini: "memory_limit = 512M …",           // php.ini fragment before PHP startup
+  prefix: "/mi-app",                      // VFS root (not related to CGI)
+  persistent: true,                       // keep VFS in IndexedDB between reloads
+  persist: true,                          // alias of 'persistent'
+  autoTransaction: false,                 // disable auto-sync; manual commit needed
+  extensions: ["intl", "mbstring"],       // preload PHP extensions
+  sharedLibs: […],                        // .so or URLs to load
+  files: […],                             // extra files to preload into VFS
+  wasmBinary: await fetch("…"),           // pre-fetched .wasm binary
+  locateFile: s => `/static/${s}`,        // resolve asset URLs
+  env: { MI_VARIABLE: "valor" },          // environment vars (for getenv())
+  preRun: [() => …],                      // before runtime init
+  postRun: [() => …],                     // after runtime end
+  print: txt => …,                        // stdout
+  printErr: txt => …,                     // stderr
+  onAbort: what => …,                     // callback on runtime abort
+  arguments: ["-f", "cli.php"],           // PHP CLI args
+  initialMemory: 4096,                    // 256 MiB (4096 × 64KiB)
+  maximumMemory: 8192,                    // 512 MiB
+  ALLOW_MEMORY_GROWTH: true,              // allow heap growth
+  noExitRuntime: true,                    // keep runtime alive after run()
+  noInitialRun: true,                     // skip automatic main() execution
+  stdin: () => prompt("STDIN:"),          // JS handler for STDIN
+  stdout: c => outEl.append(c),           // fine-grained stdout
+  stderr: c => errEl.append(c),           // fine-grained stderr
+  quit: (status, toThrow) => …,           // override Emscripten quit()
+  noFSInit: true,                         // skip auto FS mount
+  INITIAL_MEMORY: 256*1024*1024,          // byte alias
+  MAXIMUM_MEMORY: 512*1024*1024,
+  STACK_SIZE: 8*1024*1024,                // 8 MiB stack
+  ALLOW_TABLE_GROWTH: true,
+  ASSERTIONS: 1,
+  STACK_OVERFLOW_CHECK: 1,
+  SAFE_HEAP: 1,
+  GL_DEBUG: true,
+  GL_ASSERTIONS: true,
+  fetchSettings: { credentials: "include" },
+  instantiateWasm: (imports, okCb) => …,
+  monitorRunDependencies: left => …,
+  dynamicLibraries: ["a.so", "b.so"],
+  wasmMemory: new WebAssembly.Memory({ … }),
+  wasmTable: new WebAssembly.Table({ … }),
+  wasmModule: compiledModule,
+  preinitializedWebGLContext: glCtx,
+  webglContextAttributes: { alpha: false }
+}
+
+## 🧾 Notes
+
+This version (0.0.8) is Web-only, not CGI-compatible.
+Auto-transaction mode ensures file sync without explicit commit calls.
+For debugging or testing, enable:
+  ASSERTIONS: 1,
+  SAFE_HEAP: 1,
+  STACK_OVERFLOW_CHECK: 1
