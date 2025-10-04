@@ -7,25 +7,27 @@ class PhpRuntime {
     this.config = {};
     this.configDefaults = {
       DEBUG: false,
-      NUM_WORKERS: 2,
-      TIMEOUT_WORKER: 1000,
+      NUM_WORKERS: 1,
+      TIMEOUT_WORKER: 2000,
       DOCUMENT_ROOT: "/www",
       ENTRY_POINT: "",
       SERVER_ADDR: "127.0.0.1",
       SERVER_NAME: "browser-localhost",
       SERVER_SOFTWARE: "wasm-server-0.0.8",
-      SERVER_PORT: `8080`,
+      SERVER_PORT: "8080",
     };
     this.wasmBuffer = null;
     this.dbs = {};
     this.queue = [];
+    this.pendingResponses = new Map();
     this.nextId = 0;
     this.workers = [];
+    this.idleWorkers = [];
     this.warmWorker = null;
-    this.warmed = false;
+    this.isInstalled = false;
   }
 
-  async getDb(name) {
+  async _getDatabaseByName(name) {
     if (this.dbs[name]) return this.dbs[name];
     this.dbs[name] = await new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 1);
@@ -40,16 +42,15 @@ class PhpRuntime {
     return this.dbs[name];
   }
 
-  async getWasmBufferFromCache() {
+  async _getWasmBufferFromCache() {
     if (this.wasmBuffer) return this.wasmBuffer;
-    const db = await this.getDb("/wasm");
+    const db = await this._getDatabaseByName("/wasm");
     const wasmBuffer = await new Promise((resolve) => {
       const tx = db.transaction("FILE_DATA", "readonly");
       const store = tx.objectStore("FILE_DATA");
       const req = store.get("phpWasm");
       req.onsuccess = () => {
         if (req.result) {
-          // req.result is a Uint8Array stored in IndexedDB
           const uint8Array = req.result;
           const buffer = uint8Array.buffer.slice(
             uint8Array.byteOffset,
@@ -62,98 +63,23 @@ class PhpRuntime {
       };
       req.onerror = () => resolve(null);
     });
-    if (!wasmBuffer)
+    if (!wasmBuffer) {
       throw new Error("No WASM buffer in IndexedDB after worker installation.");
-    console.log("📥 [Main] WASM loaded from IndexedDB.");
+    }
+    if (this.config.DEBUG) {
+      console.log("[Main] WASM loaded from IndexedDB.");
+    }
     this.wasmBuffer = wasmBuffer;
     return wasmBuffer;
   }
 
-  async init(config = {}) {
-    this.config = { ...this.configDefaults, ...config };
-    const db = await this.getDb("/setup");
-    this.warmed = await new Promise((resolve) => {
-      const tx = db.transaction("FILE_DATA", "readonly");
-      const store = tx.objectStore("FILE_DATA");
-      const req = store.get("installed");
-      req.onsuccess = () => resolve(req.result === true);
-      req.onerror = () => resolve(false);
-    });
-
-    if (this.warmed) {
-      console.log("🔥 [Main] Using warmed worker.");
-      const wasmBin = await this.getWasmBufferFromCache();
-      this.spawnWorkers(this.config.NUM_WORKERS, wasmBin, this.config);
-    } else {
-      console.log("🚀 [Main] Starting installation worker...");
-      const primaryWorker = new Worker(
-        new URL("./php_worker.js", import.meta.url),
-        { type: "module" },
-      );
-      await new Promise((resolve, reject) => {
-        primaryWorker.onmessage = (e) => {
-          if (e.data.type === "install_complete") {
-            console.log("🎉 [Main] Installation complete, reusing worker.");
-            // Setup the installation worker as a regular worker
-            primaryWorker.available = true;
-            primaryWorker.onmessage = (e) =>
-              this.handleWorkerMessage(primaryWorker, e);
-            this.workers.push(primaryWorker);
-            resolve();
-          } else if (e.data.type === "error") {
-            reject(new Error(`Installation worker error: ${e.data.error}`));
-          } else if (e.data.type === "log" && this.config.DEBUG) {
-            console.log(...e.data.args);
-          }
-        };
-        primaryWorker.postMessage({ type: "install", cnfg: this.config });
-      });
-      // Wait a bit for filesystem sync to complete, then spawn remaining workers
-      const wasmBin = await this.getWasmBufferFromCache();
-
-      // Give time for filesystem sync to complete
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      if (this.config.NUM_WORKERS > 1) {
-        this.spawnWorkers(this.config.NUM_WORKERS - 1, wasmBin, this.config);
-      }
-    }
-  }
-
-  warmupWorker(wasmBuffer, config) {
-    console.log("🔥 [Main] Warming up a worker for next time...");
-    this.warmWorker = new Worker(new URL("./php_worker.js", import.meta.url), {
-      type: "module",
-    });
-    this.warmWorker.onmessage = async (e) => {
-      if (e.data.type === "workerReady") {
-        const db = await this.getDb("/setup");
-        await new Promise((resolve, reject) => {
-          const tx = db.transaction("FILE_DATA", "readwrite");
-          const store = tx.objectStore("FILE_DATA");
-          store.put(true, "installed");
-          tx.oncomplete = () => resolve();
-          tx.onerror = (evt) => reject(evt.target.error);
-        });
-        console.log("🔥 [Main] Worker is warm.");
-      } else if (e.data.type === "log" && this.config.DEBUG) {
-        console.log("[PHP Warmup Worker]", ...e.data.args);
-      }
-    };
-    this.warmWorker.postMessage({
-      type: "loadWasm",
-      wasmBin: wasmBuffer,
-      cnfg: config,
-    });
-  }
-
-  spawnWorkers(num_workers, wasmBuffer, config) {
+  _spawnWorkers(num_workers, wasmBuffer, config) {
     for (let i = 0; i < num_workers; i++) {
       const worker = new Worker(new URL("./php_worker.js", import.meta.url), {
         type: "module",
       });
       worker.available = false;
-      worker.onmessage = (e) => this.handleWorkerMessage(worker, e);
+      worker.onmessage = (e) => this._handleWorkerMessage(worker, e);
       this.workers.push(worker);
       worker.postMessage({
         type: "loadWasm",
@@ -163,13 +89,12 @@ class PhpRuntime {
     }
   }
 
-  processQueue() {
+  _processQueue() {
     for (const worker of this.workers) {
-      if (!worker.available) continue;
-      let taskIndex = this.queue.findIndex((q) => !q.assigned);
-      if (taskIndex === -1) break;
-      const task = this.queue[taskIndex];
-      task.assigned = true;
+      if (!worker.available || this.queue.length === 0) {
+        continue;
+      }
+      const task = this.queue.shift();
       worker.available = false;
       worker.postMessage({
         type: task.type,
@@ -179,23 +104,85 @@ class PhpRuntime {
     }
   }
 
-  handleWorkerMessage(worker, e) {
+  _handleWorkerMessage(worker, e) {
     const { type, id, result, args } = e.data;
-    if (type === "log") {
-      if (this.config.DEBUG) console.log("[PHP Worker]", ...args);
+    if (type === "load_error") {
+      if (this.config.DEBUG) {
+        console.error(
+          `A worker failed to load and has been removed: ${e.data.error}`,
+        );
+      }
+      const index = this.workers.findIndex((w) => w === worker);
+      if (index !== -1) {
+        this.workers.splice(index, 1);
+      }
       return;
     }
     if (type === "workerReady") {
       worker.available = true;
-      this.processQueue();
+      this._processQueue();
       return;
     }
-
-    const itemIndex = this.queue.findIndex((q) => q.id === id);
-    if (itemIndex !== -1) this.queue.splice(itemIndex, 1)[0].resolve(result);
-
+    const callback = this.pendingResponses.get(id);
+    if (callback) {
+      callback(result);
+      this.pendingResponses.delete(id);
+    }
     worker.available = true;
-    this.processQueue();
+    this._processQueue();
+  }
+
+  async init(config = {}) {
+    this.config = { ...this.configDefaults, ...config };
+    const db = await this._getDatabaseByName("/setup");
+    this.isInstalled = await new Promise((resolve) => {
+      const tx = db.transaction("FILE_DATA", "readonly");
+      const store = tx.objectStore("FILE_DATA");
+      const req = store.get("installed");
+      req.onsuccess = () => resolve(req.result === true);
+      req.onerror = () => resolve(false);
+    });
+    if (!this.isInstalled) {
+      if (this.config.DEBUG) {
+        console.log("[Main] Starting installation worker...");
+      }
+      const primaryWorker = new Worker(
+        new URL("./php_worker.js", import.meta.url),
+        { type: "module" },
+      );
+      await new Promise((resolve, reject) => {
+        primaryWorker.onmessage = (e) => {
+          if (e.data.type === "installation_finished") {
+            if (this.config.DEBUG) {
+              console.log("[Main] Installation complete, reusing worker.");
+            }
+            primaryWorker.available = true;
+            primaryWorker.onmessage = (e) =>
+              this._handleWorkerMessage(primaryWorker, e);
+            this.workers.push(primaryWorker);
+            resolve();
+          } else if (e.data.type === "error") {
+            reject(new Error(`Installation worker error: ${e.data.error}`));
+          }
+        };
+        primaryWorker.postMessage({ type: "install", cnfg: this.config });
+      });
+    }
+    if (this.isInstalled) {
+      if (this.config.DEBUG) {
+        console.log("[Main] Using stored wasm binary.");
+      }
+    }
+    if (this.config.DEBUG) {
+      console.log(
+        "[Main] Environment ready, loading WASM and spawning workers...",
+      );
+    }
+    const wasmBin = await this._getWasmBufferFromCache();
+    const existingWorkers = this.workers.length;
+    const workersToSpawn = this.config.NUM_WORKERS - existingWorkers;
+    this._spawnWorkers(workersToSpawn, wasmBin, this.config);
+    return this;
   }
 
   runInline(code, timeout = this.config.TIMEOUT_WORKER) {
@@ -205,17 +192,16 @@ class PhpRuntime {
         () => reject(new Error("Worker timeout")),
         timeout,
       );
+      this.pendingResponses.set(id, (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      });
       this.queue.push({
         type: "runInline",
         id,
         request: { code },
-        resolve: (res) => {
-          clearTimeout(timer);
-          resolve(res);
-        },
-        assigned: false,
       });
-      this.processQueue();
+      this._processQueue();
     });
   }
 
@@ -229,17 +215,16 @@ class PhpRuntime {
         () => reject(new Error("Worker timeout")),
         timeout,
       );
+      this.pendingResponses.set(id, (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      });
       this.queue.push({
         type: "runRequest",
         id,
         request: { method, query, payload, headers },
-        resolve: (res) => {
-          clearTimeout(timer);
-          resolve(res);
-        },
-        assigned: false,
       });
-      this.processQueue();
+      this._processQueue();
     });
   }
 }
@@ -253,12 +238,12 @@ const runPHP = {
     return initPromise;
   },
   inline: async function (code) {
-    if (!initPromise) throw new Error("Debes llamar primero a runPHP.init()");
+    if (!initPromise) throw new Error("runPHP.init() was not called");
     await initPromise;
     return php.runInline(code);
   },
   request: async function (request) {
-    if (!initPromise) throw new Error("Debes llamar primero a runPHP.init()");
+    if (!initPromise) throw new Error("runPHP.init() was not called");
     await initPromise;
     return php.runRequest(request);
   },

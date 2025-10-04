@@ -390,8 +390,8 @@
                     "Configurando PHP Runtime...";
                 // Configurar PHP Runtime
                 await runPHP.init({
-                    DEBUG: true,
-                    NUM_WORKERS: 2,
+                    DEBUG: false,
+                    NUM_WORKERS: 4,
                     TIMEOUT_WORKER: 60000,
                     DOCUMENT_ROOT: "/www",
                     ENTRY_POINT: "/www/public/index.php", // ""
