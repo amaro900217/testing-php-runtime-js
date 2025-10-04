@@ -6,7 +6,7 @@ Run PHP code directly in the browser using WebAssembly (php-wasm). This library 
 
 ## Installation
 
-Your PHP application files should be placed inside a zip archive located at `assets/www/php-api.zip`. This library will automatically unzip, persist in browser and run the files upon requests.
+Your PHP application files should be placed inside a zip archive located at `assets/www/php_api.zip`. This library will automatically unzip, persist in browser and run the files upon requests.
 
 ```html
 <!-- Load the library -->
