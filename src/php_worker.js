@@ -85,6 +85,9 @@ class PhpWorker {
   }
 
   async _installWasmBin() {
+    if (this.config.DEBUG) {
+      console.log("[Worker] Retrieving WASM binary...");
+    }
     if (this.wasmBuffer) return this.wasmBuffer;
     if (!this.db) {
       this.db = await this._connectToIndexedDB("/wasm", "FILE_DATA");
@@ -92,24 +95,13 @@ class PhpWorker {
     const db = this.db;
     const blob = await this._getItemFromIndexedDB(db, "FILE_DATA", "phpWasm");
     if (blob) {
-      if (this.config.DEBUG) {
-        console.log("[Worker] WASM loaded from IndexedDB.");
-      }
       const uint8Array = blob;
       const buffer = uint8Array.buffer.slice(
         uint8Array.byteOffset,
         uint8Array.byteOffset + uint8Array.byteLength,
       );
-      if (this.config.DEBUG) {
-        console.log(
-          `[Worker] WASM buffer from IndexedDB: ${buffer.byteLength} bytes`,
-        );
-      }
       this.wasmBuffer = buffer;
       return buffer;
-    }
-    if (this.config.DEBUG) {
-      console.log("[Worker] Downloading WASM...");
     }
     const res = await fetch("/assets/wasm/php-web.js.zip");
     if (!res.ok) throw new Error(`❌ Failed to download WASM: ${res.status}`);
@@ -122,20 +114,10 @@ class PhpWorker {
       throw new Error("❌ No WASM file found in the ZIP archive");
     }
     const wasmUint8Array = unzipped[wasmFileName];
-    if (this.config.DEBUG) {
-      console.log(
-        `[Worker] Extracted WASM file: ${wasmFileName} (${wasmUint8Array.length} bytes)`,
-      );
-    }
     const wasmBuffer = wasmUint8Array.buffer.slice(
       wasmUint8Array.byteOffset,
       wasmUint8Array.byteOffset + wasmUint8Array.byteLength,
     );
-    if (this.config.DEBUG) {
-      console.log(
-        `[Worker] Converted to ArrayBuffer: ${wasmBuffer.byteLength} bytes`,
-      );
-    }
     this.wasmBuffer = wasmBuffer;
     this._storeSingleItemToIndexedDB(db, "FILE_DATA", "phpWasm", wasmUint8Array)
       .then(() => {
@@ -149,6 +131,9 @@ class PhpWorker {
   }
 
   async _markPhpInstalled() {
+    if (this.config.DEBUG) {
+      console.log("[Worker] Marking local installation as true...");
+    }
     const db = await new Promise((resolve, reject) => {
       const request = indexedDB.open("/setup", 1);
       request.onupgradeneeded = (event) => {
@@ -190,7 +175,7 @@ class PhpWorker {
   async _installPhpFiles(
     wasmBuffer,
     config = {},
-    datUrl = "/assets/www/php.dat.zip",
+    datUrl = "/assets/www/php_api.zip",
   ) {
     if (!this.phpWeb) {
       await this._loadPhpWasm(wasmBuffer, config);
@@ -199,32 +184,17 @@ class PhpWorker {
     const phpBin = await this.phpWeb.binary;
     const alreadyInstalled = await this._isPhpInstalled();
     if (alreadyInstalled) {
-      if (this.config.DEBUG) {
-        console.log(
-          "[Worker] PHP project already installed, skipping installation",
-        );
-      }
       return;
-    }
-    if (this.config.DEBUG) {
-      console.log(
-        "[Worker] Downloading and decompressing project data from php.dat.zip...",
-      );
     }
     const response = await fetch(datUrl);
     if (!response.ok)
-      if (this.config.DEBUG) {
-        throw new Error(
-          `❌ Failed to download php.dat.zip file: ${response.statusText}`,
-        );
-      }
+      throw new Error(
+        `❌ Failed to download php_api.zip file: ${response.statusText}`,
+      );
     const compressedData = new Uint8Array(await response.arrayBuffer());
     const unzipped = unzipSync(compressedData);
     let filesInstalled = 0;
     for (const fileName in unzipped) {
-      if (this.config.DEBUG) {
-        console.log(`[Worker] Installing: ${fileName}`);
-      }
       const content = unzipped[fileName];
       const fullPath = `/www/${fileName}`;
       const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
@@ -251,9 +221,6 @@ class PhpWorker {
         }
       }
     }
-    if (this.config.DEBUG) {
-      console.log("[Worker] Syncing filesystem to IndexedDB...");
-    }
     await new Promise((resolve, reject) => {
       phpBin.FS.syncfs(false, (err) => {
         if (err) {
@@ -273,9 +240,6 @@ class PhpWorker {
       const wasmBuffer = await this._installWasmBin();
       await this._installPhpFiles(wasmBuffer, config);
       await this._markPhpInstalled();
-      if (this.config.DEBUG) {
-        console.log("[Worker] Installation complete.");
-      }
       self.postMessage({ type: "installation_finished" });
     } catch (err) {
       if (this.config.DEBUG) {
@@ -407,15 +371,9 @@ class PhpWorker {
     const chunks = [];
     const onOutput = (e) => {
       chunks.push(e.detail);
-      if (this.config.DEBUG) {
-        console.log("[Worker] PHP output chunk", e.detail);
-      }
     };
     const onError = (e) => {
       chunks.push(e.detail);
-      if (this.config.DEBUG) {
-        console.error("[Worker] PHP error chunk", e.detail);
-      }
     };
     this.phpWeb.addEventListener("output", onOutput);
     this.phpWeb.addEventListener("error", onError);
@@ -440,11 +398,6 @@ class PhpWorker {
         wasmBin.constructor.name,
       );
       throw new Error("❌ WASM buffer must be an ArrayBuffer");
-    }
-    if (this.config.DEBUG) {
-      console.log(
-        `[Worker] Initializing PhpWeb with WASM buffer: ${wasmBin.byteLength} bytes`,
-      );
     }
     this.phpWeb = new PhpWeb({
       wasmBinary: wasmBin,
@@ -498,9 +451,6 @@ class PhpWorker {
       const cap = this._captureOutput();
       await this.phpWeb.run(phpCode);
       cap.stop();
-      if (this.config.DEBUG) {
-        console.log("[Worker] PHP request completed");
-      }
       self.postMessage({ id, result: cap.get() });
     } catch (err) {
       if (this.config.DEBUG) {

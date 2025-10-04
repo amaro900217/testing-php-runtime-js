@@ -390,12 +390,11 @@
                     "Configurando PHP Runtime...";
                 // Configurar PHP Runtime
                 await runPHP.init({
-                    DEBUG: false,
+                    DEBUG: true,
                     NUM_WORKERS: 4,
                     TIMEOUT_WORKER: 60000,
                     DOCUMENT_ROOT: "/www",
-                    ENTRY_POINT: "/www/public/index.php", // ""
-                    //ENTRY_POINT: "/www/start.php", // ""
+                    ENTRY_POINT: "/www/php_api/public/index.php", // ""
                     SERVER_ADDR: "127.0.0.1",
                     SERVER_NAME: "browser-localhost",
                     SERVER_SOFTWARE: "wasm-server-0.0.8",
@@ -412,7 +411,7 @@
                 // Ejecutar petición GET automática al cargar
                 const autoResult = await runPHP.request({
                     method: "GET",
-                    query: "/api/posts", // "/www/php/script_1.php",
+                    query: "/api/posts",
                     payload: "",
                     headers: "",
                 });
@@ -481,7 +480,7 @@
                 try {
                     const result = await runPHP.request({
                         method: "GET",
-                        query: "/www/php/script_1.php",
+                        query: "/www/php_api/script_1.php",
                         payload: "",
                         headers: "",
                     });
@@ -496,7 +495,7 @@
                 try {
                     const result = await runPHP.request({
                         method: "GET",
-                        query: "/www/php/server_info.php",
+                        query: "/www/php_api/server_info.php",
                         payload: "",
                         headers: "",
                     });
@@ -511,7 +510,7 @@
                 try {
                     const result = await runPHP.request({
                         method: "POST",
-                        query: "/www/php/process.php",
+                        query: "/www/php_api/process.php",
                         payload: "x=42&y=99",
                         headers:
                             "Content-Type: application/x-www-form-urlencoded",
