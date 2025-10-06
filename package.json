@@ -1,6 +1,6 @@
 {
-  "name": "mi-libreria-zip",
-  "version": "0.0.1",
+  "name": "testing-php-runtime-js",
+  "version": "0.0.2",
   "type": "module",
   "files": [
     "dist"
