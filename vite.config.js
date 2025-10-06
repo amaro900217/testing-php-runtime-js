@@ -61,8 +61,11 @@ function movePhpWasmTemporarily() {
 
 export default defineConfig(({ command }) => {
     let port, ip;
-    const plugins = [
-        movePhpWasmTemporarily(),
+    const plugins = [];
+    if (command === "build") {
+        plugins.push(movePhpWasmTemporarily());
+    }
+    plugins.push(
         {
             name: "servir-zip-dev",
             configureServer(server) {
@@ -111,7 +114,7 @@ export default defineConfig(({ command }) => {
                 });
             },
         },
-    ];
+    );
     return {
         customLogger: createCustomLogger(),
         plugins,
