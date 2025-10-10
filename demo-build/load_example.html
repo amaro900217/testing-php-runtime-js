@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Prueba de Carga PHP-WASM</title>
+        <script src="assets/js/chart.js"></script>
+        <style>
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: monospace;
+                font-size: 14px;
+                background: #fafafa;
+                color: #222;
+            }
+            body {
+                padding: 16px;
+            }
+            h3 {
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+            label {
+                display: inline-block;
+                margin-bottom: 4px;
+            }
+            input {
+                font-family: inherit;
+                font-size: 14px;
+                padding: 4px 6px;
+                border: 1px solid #ccc;
+                background: #fff;
+                margin-bottom: 8px;
+                box-sizing: border-box;
+                text-overflow: ellipsis;
+            }
+            button {
+                display: inline-block;
+                margin: 6px 6px 6px 0;
+                padding: 6px 12px;
+                font-family: inherit;
+                font-size: 14px;
+                border: 1px solid #ccc;
+                background: #fff;
+                cursor: pointer;
+                min-width: 140px;
+                max-width: 100%;
+                text-align: left;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                box-sizing: border-box;
+            }
+            button:hover {
+                background: #f2f2f2;
+            }
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            pre {
+                margin: 0;
+                padding: 12px;
+                border: 1px solid #ccc;
+                background: #fff;
+                line-height: 1.4;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            a {
+                font-size: 12px;
+                text-decoration: none;
+                display: inline-block;
+                margin-top: 8px;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+            .stats {
+                margin-top: 16px;
+                font-size: 13px;
+            }
+            .progress {
+                width: 100%;
+                height: 6px;
+                background: #ddd;
+                margin-bottom: 8px;
+                position: relative;
+            }
+            .progress-bar {
+                height: 6px;
+                background: #4caf50;
+                width: 0%;
+                transition: width 0.2s linear;
+            }
+            .chart-container {
+                background: #fff;
+                border: 1px solid #ccc;
+                padding: 12px;
+                height: 200px;
+            }
+            .test-container,
+            #output-container {
+                background: #fff;
+                border: 1px solid #ccc;
+                padding: 12px;
+                margin-top: 12px;
+                overflow-y: auto;
+                max-height: 25vh;
+                box-sizing: border-box;
+            }
+            .links {
+                margin-top: 20px;
+                margin-bottom: 80px;
+            }
+            .console-overlay {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                max-height: 50px;
+                transition: max-height 0.3s ease;
+                background: #111;
+                overflow: hidden;
+                z-index: 9999;
+                font-family: monospace;
+                font-size: 0.75rem;
+            }
+            .console-overlay.expanded {
+                max-height: 45vh;
+            }
+            .console-toggle {
+                width: 100%;
+                background: #000;
+                color: #eee;
+                border: none;
+                padding: 0.4rem 0.6rem;
+                height: 50px;
+                text-align: center;
+                margin: 0;
+            }
+            .console-toggle:hover {
+                background: #000;
+            }
+            .console-content {
+                padding: 0.75rem;
+                overflow-y: auto;
+                height: 35vh;
+            }
+            .console-content ul {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+            .console-content li {
+                margin-bottom: 2px;
+                word-break: break-word;
+            }
+        </style>
+    </head>
+    <body>
+        <h3>Prueba de Carga con scripts...</h3>
+        <div id="timer-details" style="padding-bottom: 0.5rem"></div>
+        <div id="timer-status">Inicializando WASM...</div>
+        <br />
+        <label for="total-requests">Total de solicitudes:</label><br />
+        <input
+            type="number"
+            id="total-requests"
+            value="50"
+            min="1"
+            max="1000"
+        />
+        <br />
+        <label for="concurrent-limit">Límite de concurrencia:</label><br />
+        <input type="number" id="concurrent-limit" value="5" min="1" max="20" />
+        <br />
+        <label for="script-path">Script a ejecutar:</label><br />
+        <input
+            type="text"
+            id="script-path"
+            style="width: 80%"
+            value="/www/php_api/VARIOUS/script.php"
+        />
+        <br /><br />
+        <button id="run-test">Iniciar Prueba</button>
+        <button id="stop-test" disabled>Detener</button>
+        <button id="btnInline" disabled>Show Scripts</button>
+        <button id="btnRefresh" disabled>Recargar</button>
+        <div id="output-container">
+            <div id="output"></div>
+        </div>
+        <div class="stats">
+            <div class="progress">
+                <div class="progress-bar" id="overall-progress"></div>
+            </div>
+            <div id="stats-text" style="padding-bottom: 0.5rem">
+                Progreso: 0/0 (0.0%) | Completadas: 0 | Fallidas: 0 | Tiempo:
+                0.0s | Promedio: 0.0ms/req
+            </div>
+            <div class="chart-container">
+                <canvas id="response-time-chart"></canvas>
+            </div>
+        </div>
+        <div class="test-container">
+            <pre id="results" style="border: none"></pre>
+        </div>
+        <div class="links">
+            <a href="index.html">Test CRUD sobre una API PHP custom</a><br />
+            <a href="laravel_example.html">Test con backend API Laravel 12</a>
+        </div>
+        <div class="console-overlay" id="console-overlay">
+            <button class="console-toggle" id="console-toggle">
+                🖥️ Consola de Logs
+            </button>
+            <div class="console-content">
+                <ul id="log-list"></ul>
+            </div>
+        </div>
+        <script type="module" src="php_runtime.js"></script>
+        <script type="module">
+            /* ====== Estado global ====== */
+            const output = document.getElementById("output");
+            const resultsEl = document.getElementById("results");
+            const statsText = document.getElementById("stats-text");
+            const progressBar = document.getElementById("overall-progress");
+            let responseTimeChart = null;
+
+            const appState = {
+                phpReady: false,
+                testInProgress: false,
+                testRunning: false,
+                testStartTime: 0,
+                completedRequests: 0,
+                failedRequests: 0,
+                totalRequests: 0,
+                responseTimes: [],
+                concurrency: 5,
+                scriptPath: "/www/php_api/hello_world.php",
+            };
+
+            /* ====== Consola Overlay ====== */
+            const consoleOverlay = document.getElementById("console-overlay");
+            const consoleToggle = document.getElementById("console-toggle");
+            consoleToggle.addEventListener("click", () =>
+                consoleOverlay.classList.toggle("expanded"),
+            );
+
+            function addLog(type, args) {
+                const logList = document.getElementById("log-list");
+                if (!logList) return;
+                const li = document.createElement("li");
+                const time = new Date().toLocaleTimeString();
+                li.textContent = `[${time}] [${type.toUpperCase()}] ${args.join(" ")}`;
+                li.style.color =
+                    type === "error"
+                        ? "#f66"
+                        : type === "warn"
+                          ? "#ff6"
+                          : "#eee";
+                logList.appendChild(li);
+                logList.scrollTop = logList.scrollHeight;
+            }
+            window.__originalConsole = { ...console };
+            ["log", "warn", "error", "info", "debug"].forEach((m) => {
+                console[m] = (...args) => {
+                    addLog(m, args);
+                    window.__originalConsole[m](...args);
+                };
+            });
+
+            const OriginalWorker = window.Worker;
+            window.Worker = function (...args) {
+                const w = new OriginalWorker(...args);
+                w.addEventListener("message", (e) => {
+                    if (e.data) {
+                        const msg = e.data.data ?? JSON.stringify(e.data);
+                        addLog("log", [msg]);
+                    }
+                });
+                return w;
+            };
+
+            /* ====== Funciones UI ====== */
+            function logMessage(msg, isError = false) {
+                resultsEl.textContent += msg + "\n";
+                resultsEl.scrollTop = resultsEl.scrollHeight;
+            }
+
+            function updateStats() {
+                const totalProcessed =
+                    appState.completedRequests + appState.failedRequests;
+                const progress =
+                    (totalProcessed / appState.totalRequests) * 100;
+                const elapsed = (
+                    (Date.now() - appState.testStartTime) /
+                    1000
+                ).toFixed(1);
+                const avgTime =
+                    appState.responseTimes.length > 0
+                        ? (
+                              appState.responseTimes.reduce(
+                                  (a, b) => a + b,
+                                  0,
+                              ) / appState.responseTimes.length
+                          ).toFixed(2)
+                        : 0;
+                progressBar.style.width = `${progress}%`;
+                statsText.textContent = `Progreso: ${totalProcessed}/${appState.totalRequests} (${progress.toFixed(1)}%) | Completadas: ${appState.completedRequests} | Fallidas: ${appState.failedRequests} | Tiempo: ${elapsed}s | Promedio: ${avgTime}ms/req`;
+            }
+
+            /* ====== Gráfico ====== */
+            function initChart() {
+                const ctx = document
+                    .getElementById("response-time-chart")
+                    .getContext("2d");
+                responseTimeChart = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: "Tiempo de respuesta (ms)",
+                                data: [],
+                                borderColor: "rgb(75,192,192)",
+                                tension: 0.1,
+                                borderWidth: 2,
+                                pointRadius: 3,
+                                pointHoverRadius: 5,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 0 },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: "Tiempo (ms)" },
+                            },
+                            x: { display: false },
+                        },
+                        plugins: { legend: { display: false } },
+                    },
+                });
+            }
+
+            function addDataPoint(responseTime) {
+                if (!responseTimeChart) return;
+                const labels = responseTimeChart.data.labels;
+                const data = responseTimeChart.data.datasets[0].data;
+                labels.push((labels.length + 1).toString());
+                data.push(responseTime);
+                if (data.length > 100) {
+                    labels.shift();
+                    data.shift();
+                }
+                responseTimeChart.update("none");
+            }
+
+            /* ====== PHP-WASM ====== */
+            async function initPHP() {
+                try {
+                    await runPHP.init({
+                        DEBUG: true,
+                        NUM_WORKERS: 4,
+                        TIMEOUT_WORKER: 60000,
+                        DOCUMENT_ROOT: "/www",
+                        SERVER_NAME: "browser-localhost",
+                    });
+                    appState.phpReady = true;
+                    output.textContent = "PHP Runtime inicializado";
+                    updateTimerStatus("PHP-WASM listo", true);
+                    ["btnInline", "btnRefresh"].forEach((id) => {
+                        const btn = document.getElementById(id);
+                        if (btn) btn.disabled = false;
+                    });
+                } catch (err) {
+                    console.error("Error inicializando PHP-WASM:", err);
+                    updateTimerStatus("Error inicializando PHP-WASM", true);
+                }
+            }
+
+            /* ====== Requests ====== */
+            document.getElementById("btnInline").onclick = async () => {
+                output.textContent = "Ejecutando PHP Inline...";
+                try {
+                    const code = `
+			 <?php
+			 $dir = "/www/php_api/VARIOUS";
+			 $files = scandir($dir);
+			 $list = array_filter($files, fn($f) => !in_array($f, ['.', '..']));
+			 $fullPaths = array_map(fn($f) => "$dir/$f", $list);
+			 echo implode("\n", $fullPaths);
+			`;
+                    const result = await runPHP.inline(code);
+                    output.textContent = result;
+                } catch (err) {
+                    output.textContent = `Error en PHP Inline: ${err.message}`;
+                }
+            };
+            document.getElementById("btnRefresh").onclick = () =>
+                location.reload();
+
+            /* ====== Test de carga ====== */
+            async function executeRequest(idx) {
+                const start = performance.now();
+                try {
+                    const scriptPath =
+                        document.getElementById("script-path").value ||
+                        "benchmark.php";
+                    if (!scriptPath.endsWith(".php"))
+                        throw new Error(
+                            "La ruta del script debe terminar en .php",
+                        );
+                    const result = await runPHP.request({
+                        method: "GET",
+                        query: scriptPath,
+                    });
+                    const duration = Math.round(performance.now() - start);
+                    appState.completedRequests++;
+                    appState.responseTimes.push(duration);
+                    logMessage(
+                        `[${idx}] ${scriptPath} completado en ${duration}ms`,
+                    );
+                    addDataPoint(duration);
+                    updateStats();
+                    return { success: true, duration };
+                } catch (err) {
+                    const duration = Math.round(performance.now() - start);
+                    appState.failedRequests++;
+                    logMessage(
+                        `[${idx}] Error después de ${duration}ms: ${err.message}`,
+                        true,
+                    );
+                    updateStats();
+                    return { success: false, error: err, duration };
+                }
+            }
+
+            async function processBatch(start, end) {
+                if (!appState.testInProgress) return;
+                const batchSize = Math.min(
+                    end - start,
+                    appState.totalRequests - start,
+                );
+                const promises = [];
+                for (let i = 0; i < batchSize; i++) {
+                    promises.push(executeRequest(start + i));
+                }
+                const results = await Promise.all(promises);
+                const nextStart = start + batchSize;
+                if (nextStart < appState.totalRequests) {
+                    setTimeout(() => {
+                        if (appState.testInProgress)
+                            processBatch(
+                                nextStart,
+                                nextStart + appState.concurrency,
+                            );
+                    }, 0);
+                } else {
+                    testComplete();
+                }
+            }
+
+            async function runLoadTest() {
+                if (appState.testInProgress) {
+                    console.warn("Ya hay una prueba en curso");
+                    return;
+                }
+
+                try {
+                    appState.testStartTime = Date.now();
+                    appState.completedRequests = 0;
+                    appState.failedRequests = 0;
+                    appState.responseTimes = [];
+                    appState.testInProgress = true;
+                    appState.totalRequests =
+                        parseInt(
+                            document.getElementById("total-requests").value,
+                        ) || 10;
+                    appState.concurrency =
+                        parseInt(
+                            document.getElementById("concurrent-limit").value,
+                        ) || 5;
+                    appState.scriptPath =
+                        document.getElementById("script-path").value ||
+                        "/www/php_api/hello_world.php";
+                    resultsEl.textContent = "";
+                    updateStats();
+                    document.getElementById("run-test").disabled = true;
+                    document.getElementById("stop-test").disabled = false;
+
+                    processBatch(0, appState.concurrency);
+                } catch (err) {
+                    console.error(err);
+                    stopTest();
+                }
+            }
+
+            function testComplete() {
+                if (!appState.testInProgress) return;
+                const totalTime = (Date.now() - appState.testStartTime) / 1000;
+                const totalReq =
+                    appState.completedRequests + appState.failedRequests;
+                const avgResp =
+                    appState.responseTimes.length > 0
+                        ? Math.round(
+                              appState.responseTimes.reduce(
+                                  (a, b) => a + b,
+                                  0,
+                              ) / appState.responseTimes.length,
+                          )
+                        : 0;
+                const successRate =
+                    totalReq > 0
+                        ? (appState.completedRequests / totalReq) * 100
+                        : 0;
+                logMessage("\n=== RESUMEN DE LA PRUEBA ===");
+                logMessage(`Tiempo total: ${totalTime.toFixed(2)}s`);
+                logMessage(`Solicitudes totales: ${totalReq}`);
+                logMessage(`Completadas: ${appState.completedRequests}`);
+                logMessage(`Fallidas: ${appState.failedRequests}`);
+                logMessage(`Tasa de éxito: ${successRate.toFixed(2)}%`);
+                logMessage(`Tiempo promedio de respuesta: ${avgResp}ms`);
+                document.getElementById("run-test").disabled = false;
+                document.getElementById("stop-test").disabled = true;
+                appState.testInProgress = false;
+            }
+
+            /* ====== Detener prueba ====== */
+            function stopTest() {
+                if (!appState.testInProgress) {
+                    console.warn("No hay prueba en curso");
+                    return;
+                }
+                appState.testInProgress = false;
+                logMessage("\n--- Prueba detenida por el usuario ---");
+                logMessage(
+                    `Procesadas: ${appState.completedRequests + appState.failedRequests}/${appState.totalRequests}`,
+                );
+                document.getElementById("run-test").disabled = false;
+                document.getElementById("stop-test").disabled = true;
+            }
+
+            /* ====== Inicialización ====== */
+            document.addEventListener("DOMContentLoaded", () => {
+                initChart();
+                initPHP();
+                document
+                    .getElementById("run-test")
+                    .addEventListener("click", runLoadTest);
+                document
+                    .getElementById("stop-test")
+                    .addEventListener("click", stopTest);
+            });
+        </script>
+        <script>
+            const initStart = performance.now();
+            const timerStatus = document.getElementById("timer-status");
+            const timerDetails = document.getElementById("timer-details");
+
+            function updateTimerStatus(msg, isComplete = false) {
+                const elapsed = (
+                    (performance.now() - initStart) /
+                    1000
+                ).toFixed(2);
+                timerStatus.innerHTML = `${msg} (${elapsed}s)`;
+            }
+            function addTimerDetail(msg) {
+                const elapsed = (
+                    (performance.now() - initStart) /
+                    1000
+                ).toFixed(2);
+                timerDetails.innerHTML += `<div>${msg} (${elapsed}s)</div>`;
+            }
+            window.addEventListener("load", () =>
+                addTimerDetail("Página cargada"),
+            );
+            document.addEventListener("php-wasm-ready", () => {
+                addTimerDetail("PHP-WASM listo");
+            });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Ejemplo con API Laravel 12...</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: monospace;
+                font-size: 14px;
+                background: #fafafa;
+                color: #222;
+            }
+            body {
+                padding: 16px;
+            }
+            h2 {
+                font-size: 16px;
+                margin-bottom: 20px;
+            }
+            button {
+                display: block;
+                margin: 8px 0;
+                padding: 6px 12px;
+                font-family: inherit;
+                font-size: 14px;
+                border: 1px solid #ccc;
+                background: #fff;
+                cursor: pointer;
+                min-width: 140px;
+                max-width: 100%;
+                text-align: left;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                box-sizing: border-box;
+            }
+            button:hover {
+                background: #f2f2f2;
+            }
+            pre {
+                margin-top: 16px;
+                padding: 12px;
+                border: 1px solid #ccc;
+                background: #fff;
+                line-height: 1.4;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            a {
+                font-size: 12px;
+                text-decoration: none;
+                display: inline-block;
+                margin-top: 8px;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>Ejemplo con API Laravel 12...</h2>
+        <button id="btnGetPosts">
+            runPHP.request GET a endpoint '/api/posts'
+        </button>
+        <button id="btnInline">runPHP.inline de código PHP</button>
+        <button id="btnRefresh">Recargar Página</button>
+        <pre id="output">Inicializando...</pre>
+        <a href="index.html">Test CRUD sobre una API PHP custom</a><br />
+        <a href="load_example.html">Test con métricas de carga</a>
+        <!-- ==================== UTILIDADES ==================== -->
+        <script type="module">
+            window.output = document.getElementById("output");
+            window.setOutput = (text) => {
+                output.textContent = text.trim();
+            };
+            window.measure = async (label, fn) => {
+                const start = performance.now();
+                try {
+                    const result = await fn();
+                    const time = Math.round(performance.now() - start);
+                    return { result, time };
+                } catch (e) {
+                    throw new Error(`${label} falló: ${e.message}`);
+                }
+            };
+        </script>
+        <!-- ==================== INICIALIZACIÓN DE LIBRERÍA ==================== -->
+        <script src="php_runtime.js" type="module"></script>
+        <script type="module">
+            window.initTime = 0;
+            try {
+                const { time } = await measure("PHP Runtime init", () =>
+                    runPHP.init({
+                        DEBUG: false,
+                        TIMEOUT_WORKER: 120000,
+                        DOCUMENT_ROOT: "/www",
+                        ENTRY_POINT:
+                            "/www/php_api/LARAVEL_API/public/index.php",
+                        SERVER_NAME: "browser-localhost",
+                    }),
+                );
+                window.initTime = time;
+                setOutput(`PHP Runtime inicializado (${initTime} ms)`);
+            } catch (e) {
+                setOutput(`Error al inicializar PHP Runtime: ${e.message}`);
+            }
+        </script>
+        <!-- ==================== REQUEST PHP ==================== -->
+        <script type="module">
+            const btnGetPosts = document.getElementById("btnGetPosts");
+            btnGetPosts.onclick = async () => {
+                setOutput("Ejecutando PHP Request...");
+                try {
+                    const { result, time } = await measure(
+                        "GET /api/posts",
+                        () =>
+                            runPHP.request({
+                                method: "GET",
+                                query: "/api/posts",
+                                payload: "",
+                                headers: "",
+                            }),
+                    );
+                    setOutput(
+                        `Request GET al endpoint '/api/posts' completado en ${time} ms\n` +
+                            `Tiempo total (init + request): ${initTime + time} ms\n\n` +
+                            `--- Resultado ---\n${result}`,
+                    );
+                } catch (e) {
+                    setOutput(`Error en GET /api/posts: ${e.message}`);
+                }
+            };
+        </script>
+        <!-- ==================== INLINE PHP ==================== -->
+        <script type="module">
+            const btnInline = document.getElementById("btnInline");
+            btnInline.onclick = async () => {
+                setOutput("Ejecutando PHP Inline...");
+                try {
+                    const { result, time } = await measure("Inline PHP", () =>
+                        runPHP.inline(
+                            '<?php echo "Hola desde script PHP escrito en esta misma página HTML!! - " . date("Y-m-d H:i:s"); ?>',
+                        ),
+                    );
+                    setOutput(
+                        `Ejecución de código PHP inline completado en ${time} ms\n` +
+                            `Tiempo total (init + inline): ${initTime + time} ms\n\n` +
+                            `--- Resultado ---\n${result}`,
+                    );
+                } catch (e) {
+                    setOutput(`Error en PHP Inline: ${e.message}`);
+                }
+            };
+        </script>
+        <!-- ==================== RECARGAR ==================== -->
+        <script type="module">
+            document.getElementById("btnRefresh").onclick = () =>
+                location.reload();
+        </script>
+    </body>
+</html>

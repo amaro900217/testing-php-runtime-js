@@ -5,18 +5,18 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/mi-libreria-zip.umd.js",
-  "module": "./dist/mi-libreria-zip.es.js",
+  "main": "./dist/php_runtime.js",
+  "module": "./dist/php_runtime.js",
   "exports": {
     ".": {
-      "import": "./dist/mi-libreria-zip.es.js",
-      "require": "./dist/mi-libreria-zip.umd.js"
+      "import": "./dist/php_runtime.js",
+      "require": "./dist/php_runtime.js"
     }
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "demos": "cd demo-build && npx serve ."
   },
   "devDependencies": {
     "sirv": "^3.0.2",
@@ -25,6 +25,6 @@
   },
   "dependencies": {
     "fflate": "^0.8.2",
-    "php-wasm": "^0.0.8"
+    "php-wasm": "0.0.8"
   }
 }

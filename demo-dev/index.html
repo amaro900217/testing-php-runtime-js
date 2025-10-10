@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demostración de uso simple...</title>
+</head>
+<body>
+    <h2>Demostración de uso simple...</h2>
+
+    <button id="btnGetPosts">runPHP.request '/www/php_api/hello_world.php'</button><br /><br />
+    <button id="btnInline">runPHP.inline de código PHP</button><br /><br />
+    <button id="btnRefresh">Recargar Página</button><br /><br />
+
+    <pre id="output">Inicializando...</pre>
+
+    <!-- ==================== INICIALIZACIÓN DE LIBRERÍA ==================== -->
+    <script type="module" src="/src/php_runtime.js"></script>
+    <script type="module">
+        const output = document.getElementById("output");
+        await runPHP.init({
+	    DEBUG: true,
+	    TIMEOUT_WORKER: 60000,
+	    DOCUMENT_ROOT: "/www",
+	    SERVER_NAME: "browser-localhost",
+	});
+	output.textContent = "PHP Runtime inicializado";
+    </script>
+
+    <!-- ==================== REQUEST PHP ==================== -->
+    <script type="module">
+        document.getElementById("btnGetPosts").onclick = async () => {
+            const output = document.getElementById("output");
+            output.textContent = "Ejecutando PHP Request...";
+            const result = await runPHP.request({
+                method: "GET",
+		query: "/www/php_api/hello_world.php",
+	    });
+	    output.textContent = result;
+        };
+    </script>
+
+    <!-- ==================== INLINE PHP ==================== -->
+    <script type="module">
+        document.getElementById("btnInline").onclick = async () => {
+            const output = document.getElementById("output");
+            output.textContent = "Ejecutando PHP Inline...";
+            const result = await runPHP.inline('<?php echo "Hola desde PHP, escrito directamente en index.html!! Timestamp: " . date("Y-m-d H:i:s"); ?>');
+            output.textContent = result;
+        };
+    </script>
+
+    <!-- ==================== RECARGAR ==================== -->
+    <script type="module">
+        document.getElementById("btnRefresh").onclick = () => location.reload();
+    </script>
+</body>
+</html>
+

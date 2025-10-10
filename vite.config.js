@@ -113,10 +113,10 @@ export default defineConfig(({ command }) => {
         server.httpServer?.once("listening", () => {
           setTimeout(() => {
             console.log(
-              `\n  ➜  Local Demo:    http://localhost:${port}/demo/index.html`,
+              `\n  ➜  Local Demo:   http://localhost:${port}/demo-dev/index.html`,
             );
             console.log(
-              `  ➜  Network Demo: http://${ip}:${port}/demo/index.html\n`,
+              `  ➜  Network Demo: http://${ip}:${port}/demo-dev/index.html\n`,
             );
           }, 0);
         });

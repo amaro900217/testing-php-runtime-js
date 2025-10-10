@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>CRUD HTML + PHP + SQLite (WASM)</title>
+        <style>
+            :root {
+                --bg: #fafafa;
+                --fg: #333;
+                --card: #ffffff;
+                --border: #ccc;
+                --input-bg: #ffffff;
+                --input-fg: #111;
+                --input-border: #f5f5f5;
+                --btn-bg: #000;
+                --btn-fg: #fff;
+                --btn2-bg: #555;
+                --th-bg: #f5f5f5;
+                --spinner-bg: #fff;
+                --spinner-circle: #ddd;
+                --spinner-top: #000;
+                --spinner-text: #111;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bg: #121212;
+                    --fg: #e0e0e0;
+                    --card: #1e1e1e;
+                    --border: #333;
+                    --input-bg: #1e1e1e;
+                    --input-fg: #e0e0e0;
+                    --input-border: #333;
+                    --btn-bg: #e0e0e0;
+                    --btn-fg: #121212;
+                    --btn2-bg: #aaa;
+                    --th-bg: #2a2a2a;
+                    --spinner-bg: #121212;
+                    --spinner-circle: #444;
+                    --spinner-top: var(--btn-bg);
+                    --spinner-text: var(--fg);
+                }
+            }
+            body {
+                font-family: system-ui, sans-serif;
+                margin: 16px;
+                margin-top: 0;
+                max-width: 800px;
+                margin-left: auto;
+                margin-right: auto;
+                background: var(--bg);
+                color: var(--fg);
+            }
+            h1 {
+                text-align: center;
+                margin-top: 0;
+            }
+            form {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 1rem;
+            }
+            input,
+            button {
+                padding: 0.65rem;
+                font-size: 1rem;
+                flex: 1 1 100%;
+                border: 2px solid var(--input-border);
+                border-radius: 6px;
+                background: var(--input-bg);
+                color: var(--input-fg);
+                margin-bottom: 0.5rem;
+            }
+            input:focus {
+                outline: none;
+                border-color: var(--btn-bg);
+            }
+            button:focus-visible {
+                outline: none;
+                background-color: var(--btn2-bg) !important;
+            }
+            button {
+                background: var(--btn-bg);
+                color: var(--btn-fg);
+                border: none;
+                cursor: pointer;
+                flex: 1 1 auto;
+                margin-bottom: 0;
+            }
+            button[type="button"] {
+                background: var(--btn2-bg);
+            }
+            button:hover {
+                opacity: 0.9;
+            }
+            .table-container {
+                width: 100%;
+                overflow-x: auto;
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                min-width: 300px;
+                margin-bottom: 1rem;
+                overflow: hidden;
+            }
+            th,
+            td {
+                border: 1px solid var(--border);
+                padding: 8px;
+                text-align: left;
+            }
+            th {
+                background: var(--th-bg);
+            }
+            @media (min-width: 600px) {
+                form input[type="text"],
+                form input[type="number"] {
+                    flex: 1 1 calc(50% - 8px);
+                }
+                form button {
+                    flex: 1 1 calc(50% - 8px);
+                }
+            }
+            #body-container {
+                padding: 1.5rem;
+            }
+            .cards-container {
+                margin-bottom: 1rem;
+                display: flex;
+                gap: 1rem;
+            }
+            .card {
+                background: var(--th-bg);
+                flex: 1;
+                padding: 1.2rem;
+                border-radius: 6px;
+                text-align: center;
+            }
+            .action-section,
+            .action-section-header {
+                width: 5rem;
+                text-align: center;
+            }
+            .no-data-em {
+                line-height: 2.4rem;
+            }
+            #spinner {
+                position: fixed;
+                inset: 0;
+                background: var(--spinner-bg);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                gap: 16px;
+                font-size: 1.2rem;
+                z-index: 9999;
+                color: var(--spinner-text);
+                transition: opacity 0.5s ease;
+            }
+            #spinner.hidden {
+                opacity: 0;
+                pointer-events: none;
+            }
+            .spinner-circle {
+                width: 64px;
+                height: 64px;
+                border: 6px solid var(--spinner-circle);
+                border-top-color: var(--spinner-top);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            .spinner-text {
+                font-weight: 500;
+                letter-spacing: 0.5px;
+                color: var(--spinner-text);
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="body-container">
+            <h1>Mis Items</h1>
+            <form id="item-form">
+                <input type="hidden" id="id" name="id" />
+                <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    placeholder="Nombre"
+                    required
+                />
+                <input
+                    type="number"
+                    id="amount"
+                    name="amount"
+                    placeholder="Cantidad"
+                    required
+                />
+                <button type="submit">Guardar</button>
+                <button type="button" id="cancel">Cancelar</button>
+            </form>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Título</th>
+                            <th>Cantidad</th>
+                            <th class="action-section-header">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-body"></tbody>
+                </table>
+            </div>
+            <div id="summary-cards"></div>
+            <a href="laravel_example.html" style="font-size: 0.75rem">
+                Test con backend API Laravel 12 </a
+            ><br />
+            <a href="load_example.html" style="font-size: 0.75rem">
+                Test con métricas de carga </a
+            ><br />
+            <a href="#" id="btnDescargarDB" style="font-size: 0.75rem">
+                Descargar base de datos
+            </a>
+        </div>
+        <script src="php_runtime.js" type="module"></script>
+        <script type="module">
+            document.addEventListener("DOMContentLoaded", async () => {
+                const body = document.getElementById("items-body");
+                const form = document.getElementById("item-form");
+                const cancel = document.getElementById("cancel");
+                const idInput = document.getElementById("id");
+                const titleInput = document.getElementById("title");
+                const amountInput = document.getElementById("amount");
+
+                // Spinner con texto dinámico
+                const spinner = document.createElement("div");
+                spinner.id = "spinner";
+                spinner.innerHTML = `
+			 <div class="spinner-circle"></div>
+			 <div class="spinner-text" id="spinner-text">Cargando PHP...</div>
+			`;
+                document.body.appendChild(spinner);
+                const spinnerText = document.getElementById("spinner-text");
+                document.body.style.pointerEvents = "none";
+                // Paso 1: Inicializa PHP WebAssembly
+                spinnerText.textContent = "Cargando PHP...";
+                await runPHP.init({
+                    DEBUG: false,
+                    NUM_WORKERS: 1,
+                    TIMEOUT_WORKER: 60000,
+                    DOCUMENT_ROOT: "/www",
+                    ENTRY_POINT: "",
+                    SERVER_ADDR: "127.0.0.1",
+                    SERVER_NAME: "browser-localhost",
+                    SERVER_SOFTWARE: "wasm-server-0.0.8",
+                    SERVER_PORT: "8080",
+                });
+                // Paso 2: Ejecutar tareas warmup
+                const steps = [
+                    {
+                        msg: "Inicializando PHP...",
+                        code: `<?php echo "PHP activo"; ?>`,
+                    },
+                    {
+                        msg: "Inicializando SQLite...",
+                        code: `<?php
+				$db = new PDO("sqlite:/www/php_api/CRUD/data/app.sqlite");
+				$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+				$db->exec("CREATE TABLE IF NOT EXISTS items (
+				            id INTEGER PRIMARY KEY AUTOINCREMENT,
+				            title TEXT NOT NULL,
+				            amount INTEGER NOT NULL)");
+				$rows = $db->query("SELECT id, title, amount FROM items ORDER BY id DESC")
+				          ->fetchAll(PDO::FETCH_ASSOC);
+				echo "SQLite cargado...";
+				$base = '/www/php_api/CRUD';
+				require_once "$base/api/items/create.php";
+				require_once "$base/api/items/list.php";
+				require_once "$base/api/items/summary.php";
+				$commonFiles = [
+				    "$base/data/app.sqlite",
+				    "$base/inc/db.php",
+				];
+				foreach ($commonFiles as $file) {
+				    if (is_file($file)) {
+				        require_once $file;
+				        echo "Cargado: $file";
+				    }
+				}
+				try {
+				    $db = new PDO("sqlite:/www/php_api/CRUD/data/app.sqlite");
+				    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+				    $db->query("SELECT 1"); // simple test de conexión
+				    echo "SQLite cargada correctamente.\n";
+				} catch (Exception $e) {
+				    echo "No se pudo abrir la base de datos: {$e->getMessage()}\n";
+				}
+				if (function_exists('opcache_compile_file')) {
+				    echo "Compilando archivos en Opcache...\n";
+				    $files = [
+				        "$base/api/items/list.php",
+				        "$base/api/items/summary.php",
+				        "$base/api/items/update.php",
+				        ...array_filter($commonFiles, 'is_file')
+				    ];
+				    foreach ($files as $f) {
+				        @opcache_compile_file($f);
+				    }
+				    echo "Opcache precalentado.\n";
+				} else {
+				    echo "Opcache no disponible o no habilitado en CLI.";
+				}
+				?>`,
+                    },
+                    {
+                        msg: "Finalizando configuración...",
+                        code: `<?php echo "Warmup completado"; ?>`,
+                    },
+                ];
+                for (const step of steps) {
+                    spinnerText.textContent = step.msg;
+                    console.log(step.msg);
+                    await new Promise((r) => setTimeout(r, 500)); // pequeña pausa visual
+                    const res = await runPHP.inline(step.code);
+                    console.log(res);
+                }
+                // Paso final
+                spinnerText.textContent = "Inicialización completa...";
+                // Oculta el spinner
+                await new Promise((r) => setTimeout(r, 500));
+                spinner.classList.add("hidden");
+                setTimeout(() => spinner.remove(), 600);
+                document.body.style.pointerEvents = "auto";
+                console.log("Entorno PHP completamente inicializado");
+                // --- CRUD LOGIC ---
+                async function load() {
+                    const res = await runPHP.request({
+                        method: "GET",
+                        query: "/www/php_api/CRUD/api/items/list.php",
+                    });
+                    body.innerHTML = res;
+                }
+
+                // --- Summary Logic ---
+                async function loadSummary() {
+                    const summaryContainer =
+                        document.getElementById("summary-cards");
+                    const res = await runPHP.request({
+                        method: "GET",
+                        query: "/www/php_api/CRUD/api/items/summary.php",
+                    });
+                    summaryContainer.innerHTML = res;
+                }
+
+                // Cargar tabla y summary al inicio
+                await load();
+                await loadSummary();
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const data = new FormData(form);
+                    const url = idInput.value
+                        ? "/www/php_api/CRUD/api/items/update.php"
+                        : "/www/php_api/CRUD/api/items/create.php";
+                    const res = await runPHP.request({
+                        method: "POST",
+                        query: url,
+                        payload: new URLSearchParams([...data]).toString(),
+                        headers:
+                            "Content-Type: application/x-www-form-urlencoded",
+                    });
+                    body.innerHTML = res;
+                    form.reset();
+                    await loadSummary();
+                });
+                cancel.addEventListener("click", () => form.reset());
+                body.addEventListener("click", async (e) => {
+                    if (e.target.dataset.del) {
+                        const data = new URLSearchParams({
+                            id: e.target.dataset.del,
+                        }).toString();
+                        const res = await runPHP.request({
+                            method: "POST",
+                            query: "/www/php_api/CRUD/api/items/delete.php",
+                            payload: data,
+                            headers:
+                                "Content-Type: application/x-www-form-urlencoded",
+                        });
+                        body.innerHTML = res;
+                        await loadSummary();
+                    }
+                    if (e.target.dataset.edit) {
+                        idInput.value = e.target.dataset.edit;
+                        titleInput.value = e.target.dataset.title;
+                        amountInput.value = e.target.dataset.amount;
+                    }
+                });
+            });
+            /* ---------- Descarga directa desde IndexedDB ---------- */
+            async function downloadFromIndexedDB() {
+                // 1. Abrir la base
+                const db = await new Promise((res, rej) => {
+                    const r = indexedDB.open("/www"); // nombre que ves en DevTools
+                    r.onsuccess = () => res(r.result);
+                    r.onerror = () => rej(r.error);
+                });
+                // 2. Leer el registro que contiene el Uint8Array
+                const tx = db.transaction("FILE_DATA", "readonly");
+                const st = tx.objectStore("FILE_DATA");
+                const get = st.get("/www/php_api/CRUD/data/app.sqlite"); // clave real
+                return new Promise((resolve, reject) => {
+                    get.onsuccess = () => {
+                        const record = get.result;
+                        if (!record) {
+                            alert(
+                                "No se encontró el archivo en la base de datos local.",
+                            );
+                            return resolve();
+                        }
+                        // 3. Extraer el Uint8Array y descargar
+                        const blob = new Blob([record.contents]); // ⇦ tu campo
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "app.sqlite";
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                        resolve();
+                    };
+                    get.onerror = () => reject(get.error);
+                });
+            }
+            document
+                .getElementById("btnDescargarDB")
+                ?.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    downloadFromIndexedDB();
+                });
+        </script>
+    </body>
+</html>

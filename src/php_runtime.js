@@ -1,30 +1,28 @@
 // php_runtime.js
 
-import { PhpWeb } from "php-wasm/PhpWeb.mjs";
-
 class PhpRuntime {
   constructor() {
     this.config = {};
     this.configDefaults = {
       DEBUG: false,
       NUM_WORKERS: 1,
-      TIMEOUT_WORKER: 2000,
-      DOCUMENT_ROOT: "/www",
       ENTRY_POINT: "",
+      SERVER_PORT: "8080",
+      DOCUMENT_ROOT: "/www",
+      TIMEOUT_WORKER: 60000,
       SERVER_ADDR: "127.0.0.1",
       SERVER_NAME: "browser-localhost",
       SERVER_SOFTWARE: "wasm-server-0.0.8",
-      SERVER_PORT: "8080",
     };
-    this.wasmBuffer = null;
     this.dbs = {};
     this.queue = [];
-    this.pendingResponses = new Map();
     this.nextId = 0;
     this.workers = [];
     this.idleWorkers = [];
+    this.wasmBuffer = null;
     this.warmWorker = null;
     this.isInstalled = false;
+    this.pendingResponses = new Map();
   }
 
   async _getDatabaseByName(name) {
@@ -250,3 +248,4 @@ const runPHP = {
 };
 
 window.runPHP = runPHP;
+export { runPHP };

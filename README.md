@@ -124,8 +124,9 @@ This library is built on top of the amazing **php-wasm** project. A special than
 
 ### General Tasks
 - [ ] Use heavy frameworks for testing.
+- [ ] Add headers/cookies examples .... test multipart/form-data, etc ??
 - [ ] Rewrite HTTP lifecycle parameters — check `php-cgi-wasm` (params, cookies, headers…).
-- [ ] Persist **only** the PHP project folder (skip the rest if possible).
+- [ ] Persist **only** the PHP project folder (skip the rest if possible). After caching wasm and php project, create a DB "/storage" and only sync it??.
   > ⚠️ Might not work, since VFS must remain in memory.
 - [ ] Keep an eye on **static vs dynamic env vars** — rewrite dynamic ones per request; keep statics fixed.
 - [ ] Still consider **runtime warmups**.
