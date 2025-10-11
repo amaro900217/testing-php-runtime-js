@@ -1,6 +1,6 @@
 # PHP Runtime for Browser
 
-Execute backend PHP REST APIs natively in the browser via WebAssembly. This library is built on top of the amazing php-wasm project: [php-wasm by Sean Morris](https://github.com/seanmorris/php-wasm)
+Execute backend PHP REST APIs natively in the browser via WebAssembly, eliminating the need for a server. This library is built on top of the amazing php-wasm project: [php-wasm by Sean Morris](https://github.com/seanmorris/php-wasm)
 
 
 ## Key Features
@@ -70,13 +70,13 @@ console.log(result); // "Hello from PHP!"
 // GET request
 const users = await runPHP.request({
     method: "GET",
-    query: "/www/php_api/users.php?page=1"
+    query: "/www/api/users.php?page=1"
 });
 
 // POST request
 const response = await runPHP.request({
     method: "POST",
-    query: "/www/php_api/users.php",
+    query: "/www/api/users.php",
     payload: "name=John&email=john@example.com",
     headers: "Content-Type: application/x-www-form-urlencoded"
 });
@@ -124,11 +124,11 @@ Requires WebAssembly and Web Workers support.
 
 ## Examples
 
-Check the `demo-build/` or `demo-dev/` directories for working examples:
+Check the `demo-build/` directory for complete working examples:
 
-- **Basic Demo** (`demo-dev/index.html`) - Simple use cases of PHP execution (npm run dev)
-- **CRUD Application** (`demo-build/index.html`) - WASM PHP SQLite API backend + Vanilla HTML+JS Client
-- **Load Testing** (`demo-build/load_example.html`) - Performance metrics for some scenarios
+- **Basic Demo** (`demo-dev/index.html`) - Simple inline PHP execution
+- **CRUD Application** (`demo-build/index.html`) - Full database application
+- **Load Testing** (`demo-build/load_example.html`) - Performance metrics
 
 
 ## License
