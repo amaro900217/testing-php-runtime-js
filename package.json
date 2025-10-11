@@ -16,12 +16,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "demos": "cd demo-build && npx serve ."
+    "demos": "cd demo-build && npx serve .",
+    "test": "vitest"
   },
   "devDependencies": {
+    "jsdom": "^27.0.0",
     "sirv": "^3.0.2",
     "terser": "^5.44.0",
-    "vite": "^5.0.0"
+    "vite": "^5.0.0",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "fflate": "^0.8.2",

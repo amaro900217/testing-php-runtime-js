@@ -132,11 +132,11 @@ export default defineConfig(({
                 recursive: true
             });
 
-            // Copiar LICENSE.txt
-            const licenseSrc = resolve(__dirname, "LICENSE.txt");
-            const licenseDst = resolve(__dirname, "dist/LICENSE.txt");
-            if (existsSync(licenseSrc)) {
-                cpSync(licenseSrc, licenseDst);
+            // Copiar README.md
+            const readmeSrc = resolve(__dirname, "README.md");
+            const licenseDst = resolve(__dirname, "dist/README.md");
+            if (existsSync(readmeSrc)) {
+                cpSync(readmeSrc, licenseDst);
             }
         },
     }, {

@@ -1,0 +1,729 @@
+-- OLD README (to be fixed) --
+
+# PHP WASM Runtime in the Browser
+
+Run PHP code directly in the browser using WebAssembly (php-wasm). This library provides support for inline code execution and simulates a complete HTTP request cycle, all while being optimized for a non-blocking startup after the first initialization.
+
+## Installation
+
+Your PHP application files should be placed inside a zip archive located at `assets/www/php_api.zip`. This library will automatically unzip, persist in browser and run the files upon requests.
+
+```html
+<!-- Load the library -->
+<script src="php-runtime.js" type="module"></script>
+
+<!-- Configure the PHP Runtime -->
+<script type="module">
+  await runPHP.init({
+    DEBUG: true,
+    NUM_WORKERS: 2
+    // ...
+  });
+</script>
+```
+
+## Usage
+
+### Execute Inline PHP Code
+```html
+<script>
+  const result = await runPHP.inline('<?php echo "Hello from PHP!"; ?>');
+  console.log(result);
+</script>
+```
+
+### Make an HTTP-Like Request
+```html
+<script>
+  const result = await runPHP.request({
+      method: "GET", // POST
+      query: "/www/index.php?user=test", // "/www/api/endpoint"
+      payload: "otheruser=theuser&value=123", // ""
+      headers: "Content-Type:application/x-www-form-urlencoded;" // ""
+  });
+  console.log(result);
+</script>
+```
+
+## Configuration
+
+| Option          | Description                    | Default             |
+|-----------------|--------------------------------|---------------------|
+| DEBUG           | Enable detailed logging        | `false`             |
+| NUM_WORKERS     | Number of concurrent workers   | `2`                 |
+| TIMEOUT_WORKER  | Timeout for each worker        | `1000`              |
+| DOCUMENT_ROOT   | PHP document root              | `/www`              |
+| ENTRY_POINT     | Default PHP script             | `""`                |
+| SERVER_ADDR     | Virtual server IP              | `127.0.0.1`         |
+| SERVER_NAME     | Server name                    | `browser-localhost` |
+| SERVER_PORT     | Server port                    | `8080`              |
+| SERVER_SOFTWARE | Server version                 | `wasm-server-0.0.8` |
+
+## Features
+
+- **Server-less PHP Execution:** Run a PHP application in the browser without needing a backend.
+- **Non-Blocking Initialization:** The heavy initial setup process runs in a background worker.
+- **Concurrent Request Handling:** It can use multiple Web Workers to handle several PHP requests in parallel.
+- **Persistent Caching:** Caches the core WASM binary and the entire PHP application filesystem in IndexedDB for faster subsequent page loads.
+- **Full HTTP Environment Simulation:** Simulates `$_SERVER`, `$_GET`, `$_POST`, and other PHP superglobals.
+- **Securely Sandboxed:** The PHP environment is completely isolated from the host system.
+
+## Workflow
+
+```
+[Main Thread: Load Library and Setup Optional Config]
+       │
+       ▼
+[Primary Worker: Install WASM + PHP Project]
+       │
+       ▼
+[Check installation: Check installation and Initialize a Warm up Worker]
+       │
+       ▼
+[Worker Pool: Load WASM, Ready for Requests] ◄─────────────────┐
+       │                                                       │
+       ├────────────► [runPHP.inline(code)]                    │
+       │                      │                                │
+       │                      ▼                                │
+       │              [Assign Inline Code to Worker]           │
+       │                      │                                │
+       │                      ▼                                │
+       │              [Worker Execution]                       │
+       │                      │                                │
+       │                      ├─ Run PHP Code in WASM          │
+       │                      └─ Capture Output                │
+       │                      │                                │
+       │                      ▼                                │
+       │              *[Return Result to Main Thread]* ───────►│
+       ▼                                                       │
+[runPHP.request({method, query, payload, headers})]            │
+       │                                                       │
+       ▼                                                       │
+[Request Queue → Assign to Available Worker]                   │
+       │                                                       │
+       ▼                                                       │
+[Worker Execution]                                             │
+       │                                                       │
+       ├─ Build PHP Environment (Server + GET/POST + Headers)  │
+       ├─ Run PHP Code in WASM                                 │
+       └─ Capture Output                                       │
+       │                                                       │
+       ▼                                                       │
+*[Return Result to Main Thread]* ──────────────────────────────┘
+```
+
+## Special Thanks
+
+This library is built on top of the amazing **php-wasm** project. A special thanks to the creator and maintainers of this essential building block.
+
+- [php-wasm by seanmorris](https://php-wasm.seanmorr.is/)
+
+# 🧩 PhpWeb 0.0.8 — Development Notes
+
+## ✅ TO-DO
+
+### General Tasks
+- [ ] Use heavy frameworks for testing.
+- [ ] Add headers/cookies examples .... test multipart/form-data, etc ??
+- [ ] Rewrite HTTP lifecycle parameters — check `php-cgi-wasm` (params, cookies, headers…).
+- [ ] Persist **only** the PHP project folder (skip the rest if possible). After caching wasm and php project, create a DB "/storage" and only sync it??.
+  > ⚠️ Might not work, since VFS must remain in memory.
+- [ ] Keep an eye on **static vs dynamic env vars** — rewrite dynamic ones per request; keep statics fixed.
+- [ ] Still consider **runtime warmups**.
+- [ ] **Remove unnecessary logs.**
+- [ ] Identify **performance bottlenecks** (workers init, pool creation, etc.).
+- [ ] Cut off redundant workflow steps (to improve cold startup):
+  - Simplify output capture.
+  - Streamline worker initialization.
+
+---
+
+## 💡 Additional Considerations
+
+### 🧠 Overview
+**PhpWeb 0.0.8** exposes a simple, high-level **Web API (non-CGI)** interface to execute PHP code directly in WebAssembly environments.
+
+---
+
+## 🔄 Lifecycle API
+
+| Method | Description |
+|--------|--------------|
+| `new PhpWeb(opts?)` | Constructor |
+| `async run(code?, args?)` | Execute PHP string or file (from `opts.arguments`) |
+| `async exec(file, args?)` | Run a specific file in VFS |
+| `refresh()` | Reboot runtime (keeps VFS if persistent) |
+
+---
+
+## ⚙️ Convenience Wrappers (Sync)
+
+| Method | Description |
+|--------|--------------|
+| `r(code): string` | One-liner `run()` wrapper |
+| `x(file, args?): string` | One-liner `exec()` wrapper |
+
+---
+
+## 📁 File System (Sync — Emscripten FS Façade)
+
+| Method | Description |
+|--------|--------------|
+| `analyzePath(path)` → `FSNode` | Analyze path |
+| `stat(path)` → `Stats` | File stats |
+| `readFile(path, opts?)` → `string | Uint8Array` | Read file |
+| `writeFile(path, data, opts?)` | Write file |
+| `mkdir(path)` | Create directory |
+| `unlink(path)` | Delete file |
+| `rename(old, new)` | Rename file |
+| `readdir(path)` → `string[]` | Read directory |
+| `php.fs.*` | Raw FS access (open, close, read, etc.) |
+
+---
+
+## ⚙️ Runtime
+
+| Method | Description |
+|--------|--------------|
+| `async loadExtension(url)` | Dynamically load a `.so` shared library |
+| `addSharedLib(name, url, ini?)` | Register an additional shared library |
+
+---
+
+## 🧱 Static Properties
+
+| Property | Description |
+|-----------|--------------|
+| `PhpWeb.phpVersion: string` | e.g. `"8.3"` |
+| `PhpWeb.module: EmscriptenModule` | Low-level runtime handle |
+
+> **Note:**
+> `startTransaction()`, `commitTransaction()`, and `abortTransaction()`
+> **do not exist in v0.0.8** — automatic transaction mode is always ON.
+
+---
+
+## ⚙️ Constructor Options (`opts`)
+
+```js
+{
+  ini: "memory_limit = 512M …",           // php.ini fragment before PHP startup
+  prefix: "/mi-app",                      // VFS root (not related to CGI)
+  persistent: true,                       // keep VFS in IndexedDB between reloads
+  persist: true,                          // alias of 'persistent'
+  autoTransaction: false,                 // disable auto-sync; manual commit needed
+  extensions: ["intl", "mbstring"],       // preload PHP extensions
+  sharedLibs: […],                        // .so or URLs to load
+  files: […],                             // extra files to preload into VFS
+  wasmBinary: await fetch("…"),           // pre-fetched .wasm binary
+  locateFile: s => `/static/${s}`,        // resolve asset URLs
+  env: { MI_VARIABLE: "valor" },          // environment vars (for getenv())
+  preRun: [() => …],                      // before runtime init
+  postRun: [() => …],                     // after runtime end
+  print: txt => …,                        // stdout
+  printErr: txt => …,                     // stderr
+  onAbort: what => …,                     // callback on runtime abort
+  arguments: ["-f", "cli.php"],           // PHP CLI args
+  initialMemory: 4096,                    // 256 MiB (4096 × 64KiB)
+  maximumMemory: 8192,                    // 512 MiB
+  ALLOW_MEMORY_GROWTH: true,              // allow heap growth
+  noExitRuntime: true,                    // keep runtime alive after run()
+  noInitialRun: true,                     // skip automatic main() execution
+  stdin: () => prompt("STDIN:"),          // JS handler for STDIN
+  stdout: c => outEl.append(c),           // fine-grained stdout
+  stderr: c => errEl.append(c),           // fine-grained stderr
+  quit: (status, toThrow) => …,           // override Emscripten quit()
+  noFSInit: true,                         // skip auto FS mount
+  INITIAL_MEMORY: 256*1024*1024,          // byte alias
+  MAXIMUM_MEMORY: 512*1024*1024,
+  STACK_SIZE: 8*1024*1024,                // 8 MiB stack
+  ALLOW_TABLE_GROWTH: true,
+  ASSERTIONS: 1,
+  STACK_OVERFLOW_CHECK: 1,
+  SAFE_HEAP: 1,
+  GL_DEBUG: true,
+  GL_ASSERTIONS: true,
+  fetchSettings: { credentials: "include" },
+  instantiateWasm: (imports, okCb) => …,
+  monitorRunDependencies: left => …,
+  dynamicLibraries: ["a.so", "b.so"],
+  wasmMemory: new WebAssembly.Memory({ … }),
+  wasmTable: new WebAssembly.Table({ … }),
+  wasmModule: compiledModule,
+  preinitializedWebGLContext: glCtx,
+  webglContextAttributes: { alpha: false }
+}
+
+## 🧾 Notes
+
+This version (0.0.8) is Web-only, not CGI-compatible.
+Auto-transaction mode ensures file sync without explicit commit calls.
+For debugging or testing, enable:
+  ASSERTIONS: 1,
+  SAFE_HEAP: 1,
+  STACK_OVERFLOW_CHECK: 1
+  
+  
+  
+  
+  # PHP Runtime for Browser - Development Notes
+
+## Code Review Analysis
+
+### Architecture Overview
+- Main runtime (`php_runtime.js`) manages worker pool and request queue
+- Worker (`php_worker.js`) handles actual PHP execution using php-wasm
+- Uses IndexedDB for persistent caching of WASM binary and PHP files
+- Implements HTTP simulation with $_SERVER, $_GET, $_POST variables
+
+### Current Implementation Quality
+- **Maintainability**: ⭐⭐⭐⭐ (Well structured, needs some refactoring)
+- **Testability**: ⭐⭐⭐⭐⭐ (Excellent test coverage with Vitest)
+- **Performance**: ⭐⭐⭐⭐ (Good optimization, memory management could improve)
+- **Usability**: ⭐⭐⭐⭐⭐ (Great user experience with demos)
+- **Documentation**: ⭐⭐ (Was outdated, now updated)
+
+## Technical Improvements Needed
+
+### 1. Error Handling System
+**Current Issue**: PHP errors are returned as plain strings, losing detailed information.
+
+**Current Code**:
+```javascript
+// php_worker.js line 431
+self.postMessage({ id, result: `PHP ERROR: ${err.message}` });
+```
+
+**Proposed Solution**:
+```javascript
+class PhpError extends Error {
+  constructor(message, type, code, details = {}) {
+    super(message);
+    this.type = type; // 'syntax', 'fatal', 'warning', 'timeout'
+    this.code = code;
+    this.details = details;
+    this.timestamp = Date.now();
+  }
+}
+
+// Usage in worker
+self.postMessage({ 
+  id, 
+  result: null, 
+  error: {
+    message: err.message,
+    type: categorizeError(err.message),
+    code: err.code || 0,
+    details: { stack: err.stack }
+  }
+});
+```
+
+### 2. Worker Configuration Optimization
+**Current Issue**: Default single worker limits parallelism.
+
+**Current Code**:
+```javascript
+// php_runtime.js line 8
+NUM_WORKERS: 1, // Too conservative
+```
+
+**Proposed Solution**:
+```javascript
+// Auto-detect optimal worker count
+const getOptimalWorkerCount = () => {
+  const cores = navigator.hardwareConcurrency || 2;
+  return Math.min(cores, 4); // Cap at 4 to prevent resource exhaustion
+};
+
+NUM_WORKERS: getOptimalWorkerCount(),
+```
+
+### 3. Input Validation and Sanitization
+**Current Issue**: No robust validation of request parameters.
+
+**Current Code**:
+```javascript
+// php_worker.js line 323
+_buildPhpServerEnv({ method, query, payload, headersStr, config = {} })
+```
+
+**Proposed Solution**:
+```javascript
+const validateRequest = ({ method, query, payload, headers }) => {
+  const errors = [];
+  
+  if (!method || !['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
+    errors.push("Invalid HTTP method");
+  }
+  
+  if (!query || typeof query !== 'string') {
+    errors.push("Query parameter is required and must be a string");
+  }
+  
+  if (query.includes('..')) {
+    errors.push("Directory traversal detected in query");
+  }
+  
+  return errors;
+};
+```
+
+### 4. Memory Management
+**Current Issue**: No explicit memory limits or monitoring.
+
+**Proposed Solution**:
+```javascript
+class MemoryMonitor {
+  constructor(limitMB = 512) {
+    this.limitBytes = limitMB * 1024 * 1024;
+    this.usage = new Map();
+  }
+  
+  checkWorkerMemory(workerId, phpWeb) {
+    const memory = phpWeb.memoryUsage();
+    this.usage.set(workerId, memory);
+    
+    if (memory > this.limitBytes) {
+      throw new Error(`Worker ${workerId} exceeded memory limit`);
+    }
+  }
+  
+  getTotalUsage() {
+    return Array.from(this.usage.values()).reduce((sum, usage) => sum + usage, 0);
+  }
+}
+```
+
+### 5. Rate Limiting
+**Current Issue**: No protection against resource abuse.
+
+**Proposed Solution**:
+```javascript
+class RateLimiter {
+  constructor(maxRequestsPerSecond = 10) {
+    this.maxRequests = maxRequestsPerSecond;
+    this.requests = new Map();
+  }
+  
+  canMakeRequest(clientId) {
+    const now = Date.now();
+    const windowStart = now - 1000; // 1 second window
+    
+    if (!this.requests.has(clientId)) {
+      this.requests.set(clientId, []);
+    }
+    
+    const clientRequests = this.requests.get(clientId);
+    
+    // Remove old requests outside the window
+    const recentRequests = clientRequests.filter(time => time > windowStart);
+    this.requests.set(clientId, recentRequests);
+    
+    return recentRequests.length < this.maxRequests;
+  }
+}
+```
+
+### 6. Performance Metrics
+**Current Issue**: No built-in performance monitoring.
+
+**Proposed Solution**:
+```javascript
+class PerformanceMetrics {
+  constructor() {
+    this.metrics = {
+      requestCount: 0,
+      totalResponseTime: 0,
+      averageResponseTime: 0,
+      memoryUsage: [],
+      workerUtilization: new Map(),
+      errorCount: 0
+    };
+  }
+  
+  recordRequest(duration, memoryUsed, workerId) {
+    this.metrics.requestCount++;
+    this.metrics.totalResponseTime += duration;
+    this.metrics.averageResponseTime = this.metrics.totalResponseTime / this.metrics.requestCount;
+    this.metrics.memoryUsage.push({ timestamp: Date.now(), usage: memoryUsed });
+    
+    if (!this.metrics.workerUtilization.has(workerId)) {
+      this.metrics.workerUtilization.set(workerId, []);
+    }
+    this.metrics.workerUtilization.get(workerId).push({ timestamp: Date.now(), duration });
+  }
+  
+  getMetrics() {
+    return { ...this.metrics };
+  }
+}
+```
+
+## Architecture Improvements
+
+### 1. Plugin System
+**Proposed**: Allow custom extensions and middleware.
+
+```javascript
+class PhpRuntimePlugin {
+  constructor(name, options = {}) {
+    this.name = name;
+    this.options = options;
+  }
+  
+  beforeRequest(request) {
+    // Modify request before processing
+    return request;
+  }
+  
+  afterResponse(response) {
+    // Process response after execution
+    return response;
+  }
+  
+  onError(error) {
+    // Handle errors
+    return error;
+  }
+}
+```
+
+### 2. Request Middleware
+**Proposed**: Chain of responsibility pattern for request processing.
+
+```javascript
+class MiddlewareChain {
+  constructor() {
+    this.middlewares = [];
+  }
+  
+  use(middleware) {
+    this.middlewares.push(middleware);
+    return this;
+  }
+  
+  async execute(request) {
+    let result = request;
+    for (const middleware of this.middlewares) {
+      result = await middleware(result);
+    }
+    return result;
+  }
+}
+```
+
+### 3. Configuration Validation
+**Proposed**: Runtime configuration validation.
+
+```javascript
+const configSchema = {
+  NUM_WORKERS: { type: 'number', min: 1, max: 10 },
+  TIMEOUT_WORKER: { type: 'number', min: 1000 },
+  DEBUG: { type: 'boolean' },
+  DOCUMENT_ROOT: { type: 'string', pattern: /^\/.*$/ },
+  SERVER_PORT: { type: 'string', pattern: /^\d+$/ }
+};
+
+const validateConfig = (config) => {
+  const errors = [];
+  for (const [key, value] of Object.entries(config)) {
+    const schema = configSchema[key];
+    if (schema && !validateValue(value, schema)) {
+      errors.push(`Invalid ${key}: ${value}`);
+    }
+  }
+  return errors;
+};
+```
+
+## Testing Improvements
+
+### 1. Integration Tests
+**Current**: Only unit tests exist.
+**Proposed**: Add integration tests with actual PHP code execution.
+
+```javascript
+// tests/integration.test.js
+describe('PHP Integration Tests', () => {
+  it('should execute complex PHP application', async () => {
+    await runPHP.init({ DEBUG: true });
+    
+    // Test database operations
+    const dbResult = await runPHP.inline(`
+      <?php
+      $db = new PDO("sqlite::memory:");
+      $db->exec("CREATE TABLE test (id INTEGER, name TEXT)");
+      $stmt = $db->prepare("INSERT INTO test VALUES (?, ?)");
+      $stmt->execute([1, "test"]);
+      echo json_encode($db->query("SELECT * FROM test")->fetchAll());
+      ?>
+    `);
+    
+    expect(JSON.parse(dbResult)).toEqual([{ id: 1, name: "test" }]);
+  });
+});
+```
+
+### 2. Performance Tests
+**Proposed**: Benchmark tests for performance monitoring.
+
+```javascript
+describe('Performance Tests', () => {
+  it('should handle concurrent requests efficiently', async () => {
+    const startTime = Date.now();
+    const promises = Array(10).fill().map(() => 
+      runPHP.inline('<?php echo "Hello"; ?>')
+    );
+    
+    await Promise.all(promises);
+    const duration = Date.now() - startTime;
+    
+    expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
+  });
+});
+```
+
+## Security Considerations
+
+### 1. Input Sanitization
+**Current**: Basic string escaping.
+**Proposed**: Comprehensive sanitization.
+
+```javascript
+const sanitizeInput = (input) => {
+  if (typeof input !== 'string') return input;
+  
+  // Remove potential XSS vectors
+  return input
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+=/gi, '') // Remove event handlers
+    .trim();
+};
+```
+
+### 2. File System Security
+**Proposed**: Path traversal protection.
+
+```javascript
+const securePath = (path) => {
+  if (path.includes('..') || path.includes('~')) {
+    throw new Error('Path traversal detected');
+  }
+  
+  if (!path.startsWith('/www/')) {
+    throw new Error('Access outside document root not allowed');
+  }
+  
+  return path;
+};
+```
+
+## Future Enhancements
+
+### 1. WebAssembly Streaming
+**Proposed**: Use streaming compilation for faster WASM loading.
+
+```javascript
+const loadWasmStreaming = async (url) => {
+  const response = await fetch(url);
+  const wasmModule = await WebAssembly.compileStreaming(response);
+  return wasmModule;
+};
+```
+
+### 2. Service Worker Integration
+**Proposed**: Offline support with service workers.
+
+```javascript
+// sw.js
+self.addEventListener('fetch', (event) => {
+  if (event.request.url.includes('/php-api/')) {
+    event.respondWith(handlePhpRequest(event.request));
+  }
+});
+```
+
+### 3. WebSocket Support
+**Proposed**: Real-time communication capabilities.
+
+```javascript
+class PhpWebSocket {
+  constructor(url) {
+    this.ws = new WebSocket(url);
+    this.setupEventHandlers();
+  }
+  
+  sendPhpRequest(phpCode) {
+    this.ws.send(JSON.stringify({ type: 'php_execute', code: phpCode }));
+  }
+}
+```
+
+## Deployment Considerations
+
+### 1. CDN Optimization
+- Compress WASM binary with gzip/brotli
+- Use HTTP/2 push for critical resources
+- Implement proper cache headers
+
+### 2. Progressive Loading
+- Load core functionality first
+- Lazy load additional PHP extensions
+- Implement graceful degradation
+
+### 3. Monitoring
+- Add performance metrics collection
+- Implement error reporting
+- Track usage patterns
+
+## Known Issues
+
+1. **Memory Leaks**: Workers may accumulate memory over time
+2. **Large File Handling**: No streaming support for large files
+3. **Extension Compatibility**: Some PHP extensions may not work
+4. **Browser Compatibility**: Limited support in older browsers
+5. **Debugging**: Limited debugging capabilities in worker context
+
+## Migration Notes
+
+### From Version 0.0.7 to 0.0.8
+- Configuration structure changed
+- Worker initialization process updated
+- Error handling improved
+- Performance optimizations added
+
+### Breaking Changes
+- `runPHP.init()` now returns a Promise
+- Worker configuration format updated
+- Error response format changed
+
+## Contributing Guidelines
+
+1. **Code Style**: Follow existing patterns and use ESLint
+2. **Testing**: Add tests for new features
+3. **Documentation**: Update README for API changes
+4. **Performance**: Consider performance impact of changes
+5. **Compatibility**: Maintain backward compatibility when possible
+
+## Roadmap
+
+### Short Term (Next Release)
+- [ ] Implement structured error handling
+- [ ] Add input validation
+- [ ] Improve memory management
+- [ ] Add performance metrics
+
+### Medium Term
+- [ ] Plugin system
+- [ ] Service worker integration
+- [ ] Advanced caching strategies
+- [ ] WebSocket support
+
+### Long Term
+- [ ] Multi-language support (Python, Ruby runtimes)
+- [ ] Cloud deployment tools
+- [ ] Advanced debugging tools
+- [ ] Performance optimization suite
+
