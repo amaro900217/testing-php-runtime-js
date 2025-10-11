@@ -124,11 +124,11 @@ Requires WebAssembly and Web Workers support.
 
 ## Examples
 
-Check the `demo-build/` or `demo-dev/` directories for working examples:
+Check the `demo-build/` or `demo-dev/` directories for already working examples:
 
 - **Basic Demo** (`demo-dev/index.html`) - Simple use cases of PHP execution (npm run dev)
-- **CRUD Application** (`demo-build/index.html`) - WASM PHP SQLite API backend + Vanilla HTML+JS Client
-- **Load Testing** (`demo-build/load_example.html`) - Performance metrics for some scenarios
+- **CRUD Application** (`demo-build/index.html`) - WASM PHP SQLite API backend + Vanilla HTML+JS Client (npm run demos)
+- **Load Testing** (`demo-build/load_example.html`) - Performance metrics for some scenarios (npm run demos)
 
 
 ## License
