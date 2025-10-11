@@ -109,7 +109,7 @@ Requires WebAssembly and Web Workers support.
 
 ## Performance Tips
 
-1. **Pre-warm the runtime** with essential files during initialization
+1. **Pre-warm the runtime** with essential files before first request
 2. **Use appropriate worker count** (2-4 workers for most applications)
 3. **Minimize project size** (big projects like Laravel will run slow)
 
