@@ -1,6 +1,6 @@
-# PHP Runtime for Browser
+# 🍣 WASAPI 🍣 -> PHP Runtime for Browser
 
-Execute backend PHP REST APIs natively in the browser via WebAssembly. This library is built on top of the amazing php-wasm project: [php-wasm by Sean Morris](https://github.com/seanmorris/php-wasm)
+Execute backend PHP REST Like APIs natively in the browser via WebAssembly. This library is built on top of the amazing php-wasm project: [php-wasm by Sean Morris](https://github.com/seanmorris/php-wasm)
 
 
 ## Key Features
